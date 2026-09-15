@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart'; // Add this line
 
 import 'database/db_connection.dart'; // Add this line
+import 'views/home_page.dart'; // Import HomePage
 
 void main() async {
   // Wajib dipanggil sebelum inisialisasi yang bersifat async
@@ -23,7 +24,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Demo',
+      title: 'Kasir App Lembong',
       theme: ThemeData(
         // This is the theme of your application.
         //
@@ -42,7 +43,7 @@ class MyApp extends StatelessWidget {
         // tested with just a hot reload.
         colorScheme: .fromSeed(seedColor: Colors.deepPurple),
       ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      home: const HomePage(),
     );
   }
 }
