@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 import '../database/db_connection.dart';
 import '../models/order_model.dart';
 
@@ -22,7 +24,7 @@ class OrderService {
       }
       return orders;
     } catch (e) {
-      print("Error fetching orders: $e");
+      debugPrint("Error fetching orders: $e");
       return [];
     }
   }

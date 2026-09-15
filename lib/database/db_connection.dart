@@ -1,5 +1,6 @@
 import 'package:postgres/postgres.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:flutter/foundation.dart';
 
 class DatabaseHelper {
   static late Connection connection;
@@ -20,9 +21,9 @@ class DatabaseHelper {
           sslMode: SslMode.disable,
         ),
       );
-      print("✅ Koneksi Database PostgreSQL Berhasil!");
+      debugPrint("✅ Koneksi Database PostgreSQL Berhasil!");
     } catch (e) {
-      print("❌ Gagal terhubung ke Database: $e");
+      debugPrint("❌ Gagal terhubung ke Database: $e");
     }
   }
 }
