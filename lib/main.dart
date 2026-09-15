@@ -1,6 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart'; // Add this line
 
-void main() {
+import 'database/db_connection.dart'; // Add this line
+
+void main() async {
+  // Wajib dipanggil sebelum inisialisasi yang bersifat async
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Load file .env
+  await dotenv.load(fileName: ".env");
+
+  // Mulai koneksi database
+  await DatabaseHelper.initConnection();
+
   runApp(const MyApp());
 }
 
