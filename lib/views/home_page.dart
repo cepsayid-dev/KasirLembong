@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/order_model.dart';
 import '../services/order_service.dart';
+import 'bill_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -153,6 +154,10 @@ class _HomePageState extends State<HomePage> {
       floatingActionButton: FloatingActionButton(
         onPressed: () {
           // Akan dihubungkan ke Menu Choice / Buat Pesanan
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const BillPage()),
+          );
         },
         child: const Icon(Icons.add, size: 30),
       ),

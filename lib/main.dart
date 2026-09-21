@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart'; // Add this line
+import 'package:provider/provider.dart'; // Import Provider
 
 import 'database/db_connection.dart'; // Add this line
 import 'views/home_page.dart'; // Import HomePage
+import 'providers/bill_provider.dart'; // Import BillProvider
 
 void main() async {
   // Wajib dipanggil sebelum inisialisasi yang bersifat async
@@ -14,7 +16,13 @@ void main() async {
   // Mulai koneksi database
   await DatabaseHelper.initConnection();
 
-  runApp(const MyApp());
+  runApp(
+    // Daftarkan Provider di akar aplikasi
+    MultiProvider(
+      providers: [ChangeNotifierProvider(create: (_) => BillProvider())],
+      child: const MyApp(),
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {
