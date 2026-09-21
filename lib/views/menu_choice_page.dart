@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/menu_model.dart';
 import '../services/menu_service.dart';
+import 'choice_detail_page.dart'; // Import halaman detail pesanan
 
 class MenuChoicePage extends StatefulWidget {
   const MenuChoicePage({super.key});
@@ -65,7 +66,6 @@ class _MenuChoicePageState extends State<MenuChoicePage> {
                 Color stockColor = Colors.black;
                 bool isClickable = true;
 
-                // Logika pembagian mode pelacakan (Hybrid System)
                 if (menu.trackingMode == 'text') {
                   displayStock = menu.stockStatus;
                   if (menu.stockStatus == 'Out of Stock') {
@@ -74,7 +74,7 @@ class _MenuChoicePageState extends State<MenuChoicePage> {
                   } else if (menu.stockStatus == 'Few Left') {
                     stockColor = Colors.orange;
                   } else {
-                    stockColor = Colors.green; // In Stock
+                    stockColor = Colors.green;
                   }
                 } else if (menu.trackingMode == 'numeric') {
                   displayStock = 'Stok: ${menu.stockQty}';
@@ -82,7 +82,7 @@ class _MenuChoicePageState extends State<MenuChoicePage> {
                     stockColor = Colors.red;
                     isClickable = false;
                   } else if (menu.stockQty <= 5) {
-                    stockColor = Colors.orange; // Peringatan limit stok
+                    stockColor = Colors.orange;
                   } else {
                     stockColor = Colors.green;
                   }
@@ -107,9 +107,13 @@ class _MenuChoicePageState extends State<MenuChoicePage> {
                   ),
                   onTap: isClickable
                       ? () {
-                          // Akan diarahkan ke Choice Detail (Choice Detail.png)
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('${menu.name} dipilih')),
+                          // Navigasi ke halaman detail dengan membawa data menu
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) =>
+                                  ChoiceDetailPage(menu: menu),
+                            ),
                           );
                         }
                       : null,
