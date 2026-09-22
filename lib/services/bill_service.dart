@@ -1,13 +1,13 @@
 import 'package:flutter/foundation.dart';
-import 'package:postgres/postgres.dart'; // Wajib ditambahkan untuk Sql.named
+import 'package:postgres/postgres.dart';
 
 import '../database/db_connection.dart';
 import '../providers/bill_provider.dart';
+import '../models/bill_model.dart'; // Impor model baru
 
 class BillService {
   static Future<bool> saveBill(BillProvider provider) async {
     try {
-      // 1. Simpan ke tabel induk (bills) menggunakan Sql.named
       final billResult = await DatabaseHelper.connection.execute(
         Sql.named(
           r"INSERT INTO bills (customer_name, status, payment_method) VALUES (@name, 'unpaid', 'Cash') RETURNING id",
@@ -21,7 +21,6 @@ class BillService {
 
       final int billId = billResult.first[0] as int;
 
-      // 2. Simpan seluruh item keranjang ke tabel anak (bill_items) menggunakan Sql.named
       for (var item in provider.items) {
         await DatabaseHelper.connection.execute(
           Sql.named(
@@ -43,6 +42,29 @@ class BillService {
     } catch (e) {
       debugPrint("❌ Gagal Menyimpan Nota: $e");
       return false;
+    }
+  }
+
+  // FUNGSI BARU: Mengambil daftar nota yang statusnya 'unpaid' (Belum Bayar)
+  static Future<List<BillModel>> fetchActiveBills() async {
+    try {
+      final results = await DatabaseHelper.connection.execute(
+        "SELECT id, customer_name, created_at, status FROM bills WHERE status = 'unpaid' ORDER BY created_at DESC",
+      );
+
+      return results
+          .map(
+            (row) => BillModel(
+              id: row[0] as int,
+              customerName: row[1] as String? ?? 'Guest',
+              createdAt: row[2] as DateTime,
+              status: row[3] as String,
+            ),
+          )
+          .toList();
+    } catch (e) {
+      debugPrint("Gagal mengambil daftar nota aktif: $e");
+      return [];
     }
   }
 }

@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 
-import '../models/order_model.dart';
-import '../services/order_service.dart';
+import '../models/bill_model.dart';
+import '../services/bill_service.dart';
 import 'bill_page.dart';
+import 'order_page.dart'; // Impor halaman antrean dapur
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -12,18 +13,24 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  int _selectedIndex = 1; // Default di posisi 'O' (Orders)
-  late Future<List<OrderModel>> _ordersFuture;
+  List<BillModel> _activeBills = [];
+  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _refreshOrders();
+    _loadActiveBills();
   }
 
-  void _refreshOrders() {
+  Future<void> _loadActiveBills() async {
+    setState(() => _isLoading = true);
+    final bills = await BillService.fetchActiveBills();
+
+    if (!mounted) return; // Mencegah warning context saat async
+
     setState(() {
-      _ordersFuture = OrderService.fetchOrders();
+      _activeBills = bills;
+      _isLoading = false;
     });
   }
 
@@ -31,171 +38,100 @@ class _HomePageState extends State<HomePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Column(
-          children: [
-            Text('Header', style: TextStyle(fontSize: 14)),
-            Text(
-              'Page Name',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-          ],
+        title: const Text(
+          'Nota Aktif',
+          style: TextStyle(fontWeight: FontWeight.bold),
         ),
         centerTitle: true,
+        leading: IconButton(
+          icon: const Icon(Icons.kitchen), // Tombol akses ke Dapur (Tab O)
+          tooltip: 'Antrean Dapur',
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const OrderPage()),
+            );
+          },
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _loadActiveBills,
+          ),
+        ],
       ),
-      body: FutureBuilder<List<OrderModel>>(
-        future: _ordersFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snapshot.hasError ||
-              !snapshot.hasData ||
-              snapshot.data!.isEmpty) {
-            return const Center(child: Text('Belum ada pesanan'));
-          }
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _activeBills.isEmpty
+          ? const Center(
+              child: Text(
+                'Belum ada pesanan aktif',
+                style: TextStyle(fontSize: 16),
+              ),
+            )
+          : ListView.builder(
+              padding: const EdgeInsets.all(12.0),
+              itemCount: _activeBills.length,
+              itemBuilder: (context, index) {
+                final bill = _activeBills[index];
 
-          final orders = snapshot.data!;
-          return ListView.separated(
-            padding: const EdgeInsets.all(8.0),
-            itemCount: orders.length,
-            separatorBuilder: (context, index) => const Divider(height: 1),
-            itemBuilder: (context, index) {
-              final item = orders[index];
-              final formattedDate =
-                  "${item.orderDate.day}/${item.orderDate.month}/${item.orderDate.year}";
-              final isCompleted = item.status.toLowerCase() == 'completed';
+                // Format waktu sederhana (HH:MM)
+                final timeString =
+                    "${bill.createdAt.hour.toString().padLeft(2, '0')}:${bill.createdAt.minute.toString().padLeft(2, '0')}";
 
-              return Container(
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.black, width: 0.8),
-                ),
-                child: IntrinsicHeight(
-                  child: Row(
-                    children: [
-                      // Kolom Nomor (No)
-                      Container(
-                        width: 40,
-                        alignment: Alignment.center,
-                        decoration: const BoxDecoration(
-                          border: Border(
-                            right: BorderSide(color: Colors.black),
+                return Card(
+                  color: Colors.red.shade100, // Warna merah (Belum Lunas)
+                  elevation: 2,
+                  margin: const EdgeInsets.only(bottom: 12.0),
+                  child: ListTile(
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16.0,
+                      vertical: 8.0,
+                    ),
+                    leading: CircleAvatar(
+                      backgroundColor: Colors.red,
+                      child: Text(
+                        '${bill.id}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    title: Text(
+                      'A.N: ${bill.customerName}',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 18,
+                      ),
+                    ),
+                    subtitle: Text('Jam Order: $timeString'),
+                    trailing: const Icon(Icons.arrow_forward_ios, size: 20),
+                    onTap: () {
+                      // TODO: Navigasi untuk membuka kembali nota, tambah pesanan, atau bayar (Checkout)
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            'Buka Nota #${bill.id} - Sedang dikembangkan',
                           ),
                         ),
-                        child: Text(
-                          '${index + 1}',
-                          style: const TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                      // Kolom Tengah (A.N | D/M/Y & Order List)
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 4,
-                              ),
-                              decoration: const BoxDecoration(
-                                border: Border(
-                                  bottom: BorderSide(color: Colors.black),
-                                ),
-                              ),
-                              child: Text(
-                                'A.N: ${item.customerName} | $formattedDate',
-                                style: const TextStyle(fontSize: 12),
-                              ),
-                            ),
-                            const Padding(
-                              padding: EdgeInsets.all(8.0),
-                              child: Text(
-                                'Order List',
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      // Kolom Status (Indikator Lingkaran Merah/Hijau)
-                      Container(
-                        width: 60,
-                        decoration: const BoxDecoration(
-                          border: Border(left: BorderSide(color: Colors.black)),
-                        ),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Text(
-                              'Status',
-                              style: TextStyle(fontSize: 10),
-                            ),
-                            const SizedBox(height: 4),
-                            CircleAvatar(
-                              radius: 12,
-                              backgroundColor: isCompleted
-                                  ? Colors.green
-                                  : Colors.red,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
+                      );
+                    },
                   ),
-                ),
-              );
-            },
-          );
-        },
-      ),
-      // Floating Action Button (+)
+                );
+              },
+            ),
       floatingActionButton: FloatingActionButton(
         onPressed: () {
-          // Akan dihubungkan ke Menu Choice / Buat Pesanan
+          // Buka nota kosong, lalu refresh halaman setelah kembali dari halaman Bill
           Navigator.push(
             context,
             MaterialPageRoute(builder: (context) => const BillPage()),
-          );
+          ).then((_) => _loadActiveBills());
         },
-        child: const Icon(Icons.add, size: 30),
-      ),
-      // Bottom Navigation Bar (B, O, A, S)
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _selectedIndex,
-        type: BottomNavigationBarType.fixed,
-        onTap: (index) => setState(() => _selectedIndex = index),
-        items: const [
-          BottomNavigationBarItem(
-            icon: Text(
-              'B',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-            ),
-            label: 'Bill',
-          ),
-          BottomNavigationBarItem(
-            icon: Text(
-              'O',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-            ),
-            label: 'Orders',
-          ),
-          BottomNavigationBarItem(
-            icon: Text(
-              'A',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-            ),
-            label: 'Archive',
-          ),
-          BottomNavigationBarItem(
-            icon: Text(
-              'S',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-            ),
-            label: 'Stock',
-          ),
-        ],
+        backgroundColor: Colors.black,
+        shape: const CircleBorder(),
+        child: const Icon(Icons.add, color: Colors.white, size: 30),
       ),
     );
   }
