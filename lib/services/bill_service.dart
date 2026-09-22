@@ -4,6 +4,8 @@ import 'package:postgres/postgres.dart';
 import '../database/db_connection.dart';
 import '../providers/bill_provider.dart';
 import '../models/bill_model.dart'; // Impor model baru
+// Tambahkan impor ini di baris paling atas
+import '../models/bill_item_model.dart';
 
 class BillService {
   static Future<bool> saveBill(BillProvider provider) async {
@@ -65,6 +67,64 @@ class BillService {
     } catch (e) {
       debugPrint("Gagal mengambil daftar nota aktif: $e");
       return [];
+    }
+  }
+
+  // FUNGSI BARU 1: Mengambil isi menu dari nota tertentu
+  static Future<List<BillItemModel>> getBillItems(int billId) async {
+    try {
+      final results = await DatabaseHelper.connection.execute(
+        Sql.named(
+          "SELECT id, menu_item_id, menu_name, qty, price, notes, is_delivered, is_cancelled FROM bill_items WHERE bill_id = @id ORDER BY id ASC",
+        ),
+        parameters: {'id': billId},
+      );
+
+      return results
+          .map(
+            (row) => BillItemModel(
+              id: row[0] as int,
+              menuId: row[1] as int,
+              menuName: row[2] as String,
+              qty: row[3] as int,
+              price: double.parse(row[4].toString()),
+              notes: row[5] as String? ?? '',
+              isDelivered: row[6] as bool,
+              isCancelled: row[7] as bool,
+            ),
+          )
+          .toList();
+    } catch (e) {
+      debugPrint("Gagal mengambil rincian nota: $e");
+      return [];
+    }
+  }
+
+  // FUNGSI BARU 2: Mencoret (Membatalkan) satu item pesanan
+  static Future<bool> cancelItem(int itemId) async {
+    try {
+      await DatabaseHelper.connection.execute(
+        Sql.named("UPDATE bill_items SET is_cancelled = TRUE WHERE id = @id"),
+        parameters: {'id': itemId},
+      );
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // FUNGSI BARU 3: Memproses Pembayaran (Checkout)
+  static Future<bool> checkoutBill(int billId, String paymentMethod) async {
+    try {
+      await DatabaseHelper.connection.execute(
+        Sql.named(
+          "UPDATE bills SET status = 'paid', payment_method = @method WHERE id = @id",
+        ),
+        parameters: {'id': billId, 'method': paymentMethod},
+      );
+      return true;
+    } catch (e) {
+      return false;
     }
   }
 }

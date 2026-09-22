@@ -4,6 +4,7 @@ import '../models/bill_model.dart';
 import '../services/bill_service.dart';
 import 'bill_page.dart';
 import 'order_page.dart'; // Impor halaman antrean dapur
+import 'active_bill_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -107,15 +108,18 @@ class _HomePageState extends State<HomePage> {
                     ),
                     subtitle: Text('Jam Order: $timeString'),
                     trailing: const Icon(Icons.arrow_forward_ios, size: 20),
-                    onTap: () {
-                      // TODO: Navigasi untuk membuka kembali nota, tambah pesanan, atau bayar (Checkout)
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            'Buka Nota #${bill.id} - Sedang dikembangkan',
-                          ),
+                    onTap: () async {
+                      // Buka detail nota aktif, jika kembali dengan status 'true', refresh halaman
+                      final result = await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => ActiveBillPage(bill: bill),
                         ),
                       );
+
+                      if (result == true && mounted) {
+                        _loadActiveBills();
+                      }
                     },
                   ),
                 );
