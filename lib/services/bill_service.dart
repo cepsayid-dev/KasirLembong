@@ -49,11 +49,17 @@ class BillService {
   }
 
   // FUNGSI BARU: Mengambil daftar nota yang statusnya 'unpaid' (Belum Bayar)
+  // FUNGSI BARU/UPDATE: Mengambil nota aktif (Unpaid ATAU Paid tapi belum diantar)
   static Future<List<BillModel>> fetchActiveBills() async {
     try {
-      final results = await DatabaseHelper.connection.execute(
-        "SELECT id, customer_name, created_at, status FROM bills WHERE status = 'unpaid' ORDER BY created_at DESC",
-      );
+      final results = await DatabaseHelper.connection.execute(r"""
+        SELECT DISTINCT b.id, b.customer_name, b.created_at, b.status 
+        FROM bills b
+        LEFT JOIN bill_items bi ON b.id = bi.bill_id
+        WHERE b.status = 'unpaid' 
+           OR (b.status = 'paid' AND bi.is_delivered = FALSE AND bi.is_cancelled = FALSE)
+        ORDER BY b.created_at DESC
+        """);
 
       return results
           .map(

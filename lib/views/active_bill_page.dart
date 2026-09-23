@@ -310,74 +310,93 @@ class _ActiveBillPageState extends State<ActiveBillPage> {
                 ),
 
                 // --- 3. PANEL PEMBAYARAN ---
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.blueGrey.shade50,
-                    border: const Border(
-                      top: BorderSide(color: Colors.black26),
+                // --- 3. PANEL PEMBAYARAN ---
+                if (widget.bill.status ==
+                    'unpaid') // Hanya tampil jika belum dibayar
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.blueGrey.shade50,
+                      border: const Border(
+                        top: BorderSide(color: Colors.black26),
+                      ),
                     ),
-                  ),
-                  child: Column(
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text(
-                            'Total Tagihan',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
+                    child: Column(
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              'Total Tagihan',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
-                          ),
-                          Text(
-                            'Rp ${totalTagihan.toInt()}',
-                            style: const TextStyle(
-                              fontSize: 22,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.green,
+                            Text(
+                              'Rp ${totalTagihan.toInt()}',
+                              style: const TextStyle(
+                                fontSize: 22,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.green,
+                              ),
                             ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      SegmentedButton<String>(
-                        segments: const [
-                          ButtonSegment(
-                            value: 'Cash',
-                            label: Text('Tunai (Cash)'),
-                          ),
-                          ButtonSegment(value: 'QRIS', label: Text('QRIS')),
-                        ],
-                        selected: {_paymentMethod},
-                        onSelectionChanged: (set) =>
-                            setState(() => _paymentMethod = set.first),
-                      ),
-                      const SizedBox(height: 16),
-                      SizedBox(
-                        width: double.infinity,
-                        height: 50,
-                        child: ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.green,
-                            foregroundColor: Colors.white,
-                          ),
-                          onPressed:
-                              (_items.isEmpty || billProvider.items.isNotEmpty)
-                              ? null
-                              : _handleCheckout,
-                          child: const Text(
-                            'BAYAR SEKARANG',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        SegmentedButton<String>(
+                          segments: const [
+                            ButtonSegment(
+                              value: 'Cash',
+                              label: Text('Tunai (Cash)'),
+                            ),
+                            ButtonSegment(value: 'QRIS', label: Text('QRIS')),
+                          ],
+                          selected: {_paymentMethod},
+                          onSelectionChanged: (set) =>
+                              setState(() => _paymentMethod = set.first),
+                        ),
+                        const SizedBox(height: 16),
+                        SizedBox(
+                          width: double.infinity,
+                          height: 50,
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.green,
+                              foregroundColor: Colors.white,
+                            ),
+                            onPressed:
+                                (_items.isEmpty ||
+                                    billProvider.items.isNotEmpty)
+                                ? null
+                                : _handleCheckout,
+                            child: const Text(
+                              'BAYAR SEKARANG',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
                         ),
+                      ],
+                    ),
+                  )
+                else
+                  // Jika sudah lunas, tampilkan banner info saja
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    color: Colors.green.shade100,
+                    child: const Text(
+                      'NOTA SUDAH LUNAS\nMenunggu sisa pesanan diselesaikan oleh Dapur.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Colors.green,
+                        fontWeight: FontWeight.bold,
                       ),
-                    ],
+                    ),
                   ),
-                ),
               ],
             ),
       // Tombol untuk menambah pesanan

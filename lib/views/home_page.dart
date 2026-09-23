@@ -5,6 +5,7 @@ import '../services/bill_service.dart';
 import 'bill_page.dart';
 import 'order_page.dart'; // Impor halaman antrean dapur
 import 'active_bill_page.dart';
+import 'history_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -56,6 +57,18 @@ class _HomePageState extends State<HomePage> {
         ),
         actions: [
           IconButton(
+            icon: const Icon(
+              Icons.receipt_long,
+            ), // Tombol baru untuk Riwayat/Laporan
+            tooltip: 'Laporan Hari Ini',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const HistoryPage()),
+              );
+            },
+          ),
+          IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: _loadActiveBills,
           ),
@@ -75,13 +88,14 @@ class _HomePageState extends State<HomePage> {
               itemCount: _activeBills.length,
               itemBuilder: (context, index) {
                 final bill = _activeBills[index];
+                final isPaid = bill.status == 'paid'; // Cek apakah sudah lunas
 
-                // Format waktu sederhana (HH:MM)
                 final timeString =
                     "${bill.createdAt.hour.toString().padLeft(2, '0')}:${bill.createdAt.minute.toString().padLeft(2, '0')}";
 
                 return Card(
-                  color: Colors.red.shade100, // Warna merah (Belum Lunas)
+                  // Jika lunas = Hijau, jika belum = Merah
+                  color: isPaid ? Colors.green.shade100 : Colors.red.shade100,
                   elevation: 2,
                   margin: const EdgeInsets.only(bottom: 12.0),
                   child: ListTile(
@@ -90,7 +104,7 @@ class _HomePageState extends State<HomePage> {
                       vertical: 8.0,
                     ),
                     leading: CircleAvatar(
-                      backgroundColor: Colors.red,
+                      backgroundColor: isPaid ? Colors.green : Colors.red,
                       child: Text(
                         '${bill.id}',
                         style: const TextStyle(
@@ -106,10 +120,25 @@ class _HomePageState extends State<HomePage> {
                         fontSize: 18,
                       ),
                     ),
-                    subtitle: Text('Jam Order: $timeString'),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Jam Order: $timeString'),
+                        // Tambahkan teks status kecil di bawah jam
+                        Text(
+                          isPaid ? 'LUNAS (Menunggu Dapur)' : 'BELUM BAYAR',
+                          style: TextStyle(
+                            color: isPaid
+                                ? Colors.green.shade800
+                                : Colors.red.shade800,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
                     trailing: const Icon(Icons.arrow_forward_ios, size: 20),
                     onTap: () async {
-                      // Buka detail nota aktif, jika kembali dengan status 'true', refresh halaman
                       final result = await Navigator.push(
                         context,
                         MaterialPageRoute(
