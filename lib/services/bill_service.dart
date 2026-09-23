@@ -3,12 +3,12 @@ import 'package:postgres/postgres.dart';
 
 import '../database/db_connection.dart';
 import '../providers/bill_provider.dart';
-import '../models/bill_model.dart'; // Impor model baru
-// Tambahkan impor ini di baris paling atas
+import '../models/bill_model.dart';
 import '../models/bill_item_model.dart';
 import '../models/cart_item_model.dart';
 
 class BillService {
+  // 1. Menyimpan Nota Baru (Sekaligus Potong Stok Otomatis)
   static Future<bool> saveBill(BillProvider provider) async {
     try {
       final billResult = await DatabaseHelper.connection.execute(
@@ -25,6 +25,7 @@ class BillService {
       final int billId = billResult.first[0] as int;
 
       for (var item in provider.items) {
+        // Masukkan item ke bill_items
         await DatabaseHelper.connection.execute(
           Sql.named(
             r"INSERT INTO bill_items (bill_id, menu_item_id, menu_name, qty, price, notes) VALUES (@billId, @menuId, @menuName, @qty, @price, @notes)",
@@ -38,9 +39,19 @@ class BillService {
             'notes': item.notes,
           },
         );
+
+        // POTONG STOK OTOMATIS (Hanya jika tracking_mode = 'numeric')
+        await DatabaseHelper.connection.execute(
+          Sql.named(r"""
+            UPDATE menu_items 
+            SET stock_qty = stock_qty - @qty 
+            WHERE id = @menuId AND tracking_mode = 'numeric'
+          """),
+          parameters: {'qty': item.qty, 'menuId': item.menuId},
+        );
       }
 
-      debugPrint("✅ Nota Berhasil Disimpan ke Database!");
+      debugPrint("✅ Nota Berhasil Disimpan & Stok Terpotong!");
       return true;
     } catch (e) {
       debugPrint("❌ Gagal Menyimpan Nota: $e");
@@ -48,8 +59,7 @@ class BillService {
     }
   }
 
-  // FUNGSI BARU: Mengambil daftar nota yang statusnya 'unpaid' (Belum Bayar)
-  // FUNGSI BARU/UPDATE: Mengambil nota aktif (Unpaid ATAU Paid tapi belum diantar)
+  // 2. Mengambil daftar nota aktif (Unpaid ATAU Paid tapi belum diantar)
   static Future<List<BillModel>> fetchActiveBills() async {
     try {
       final results = await DatabaseHelper.connection.execute(r"""
@@ -77,7 +87,7 @@ class BillService {
     }
   }
 
-  // FUNGSI BARU 1: Mengambil isi menu dari nota tertentu
+  // 3. Mengambil isi menu dari nota tertentu
   static Future<List<BillItemModel>> getBillItems(int billId) async {
     try {
       final results = await DatabaseHelper.connection.execute(
@@ -107,7 +117,7 @@ class BillService {
     }
   }
 
-  // FUNGSI BARU 2: Mencoret (Membatalkan) satu item pesanan
+  // 4. Mencoret (Membatalkan) satu item pesanan
   static Future<bool> cancelItem(int itemId) async {
     try {
       await DatabaseHelper.connection.execute(
@@ -120,7 +130,7 @@ class BillService {
     }
   }
 
-  // FUNGSI BARU 3: Memproses Pembayaran (Checkout)
+  // 5. Memproses Pembayaran (Checkout)
   static Future<bool> checkoutBill(int billId, String paymentMethod) async {
     try {
       await DatabaseHelper.connection.execute(
@@ -135,10 +145,11 @@ class BillService {
     }
   }
 
-  // FUNGSI BARU 4: Menyimpan pesanan tambahan ke nota yang sudah ada
+  // 6. Menyimpan pesanan tambahan ke nota yang sudah ada (Sekaligus Potong Stok Otomatis)
   static Future<bool> addItemsToBill(int billId, List<CartItem> items) async {
     try {
       for (var item in items) {
+        // Masukkan item tambahan
         await DatabaseHelper.connection.execute(
           Sql.named(
             r"INSERT INTO bill_items (bill_id, menu_item_id, menu_name, qty, price, notes) VALUES (@billId, @menuId, @menuName, @qty, @price, @notes)",
@@ -151,6 +162,16 @@ class BillService {
             'price': item.price,
             'notes': item.notes,
           },
+        );
+
+        // POTONG STOK OTOMATIS UNTUK ITEM TAMBAHAN
+        await DatabaseHelper.connection.execute(
+          Sql.named(r"""
+            UPDATE menu_items 
+            SET stock_qty = stock_qty - @qty 
+            WHERE id = @menuId AND tracking_mode = 'numeric'
+          """),
+          parameters: {'qty': item.qty, 'menuId': item.menuId},
         );
       }
       return true;

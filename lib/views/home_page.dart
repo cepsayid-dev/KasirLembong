@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:kasir_app_lembong/views/bill_page.dart';
 
 import '../models/bill_model.dart';
 import '../services/bill_service.dart';
@@ -202,7 +203,7 @@ class _HomePageState extends State<HomePage> {
           // Membuka halaman untuk membuat pesanan baru
           final result = await Navigator.push(
             context,
-            MaterialPageRoute(builder: (context) => const MenuChoicePage()),
+            MaterialPageRoute(builder: (context) => const BillPage()),
           );
 
           if (result == true && mounted) {
