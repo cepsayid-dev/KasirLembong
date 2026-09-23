@@ -2,10 +2,11 @@ import 'package:flutter/material.dart';
 
 import '../models/bill_model.dart';
 import '../services/bill_service.dart';
-import 'bill_page.dart';
-import 'order_page.dart'; // Impor halaman antrean dapur
 import 'active_bill_page.dart';
 import 'history_page.dart';
+import 'master_menu_page.dart';
+import 'order_page.dart';
+import 'menu_choice_page.dart'; // Sesuaikan jika nama halaman menu Anda berbeda
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -27,9 +28,7 @@ class _HomePageState extends State<HomePage> {
   Future<void> _loadActiveBills() async {
     setState(() => _isLoading = true);
     final bills = await BillService.fetchActiveBills();
-
-    if (!mounted) return; // Mencegah warning context saat async
-
+    if (!mounted) return;
     setState(() {
       _activeBills = bills;
       _isLoading = false;
@@ -45,21 +44,20 @@ class _HomePageState extends State<HomePage> {
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
         centerTitle: true,
-        leading: IconButton(
-          icon: const Icon(Icons.kitchen), // Tombol akses ke Dapur (Tab O)
-          tooltip: 'Antrean Dapur',
-          onPressed: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const OrderPage()),
-            );
-          },
-        ),
+        // Properti 'leading' sudah dihapus agar Drawer otomatis muncul
         actions: [
           IconButton(
-            icon: const Icon(
-              Icons.receipt_long,
-            ), // Tombol baru untuk Riwayat/Laporan
+            icon: const Icon(Icons.kitchen), // Tombol Dapur
+            tooltip: 'Antrean Dapur',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const OrderPage()),
+              );
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.receipt_long), // Tombol Riwayat/Laporan
             tooltip: 'Laporan Hari Ini',
             onPressed: () {
               Navigator.push(
@@ -74,6 +72,50 @@ class _HomePageState extends State<HomePage> {
           ),
         ],
       ),
+
+      drawer: Drawer(
+        child: ListView(
+          padding: EdgeInsets.zero,
+          children: [
+            const DrawerHeader(
+              decoration: BoxDecoration(color: Colors.black87),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  Icon(Icons.storefront, color: Colors.white, size: 40),
+                  SizedBox(height: 12),
+                  Text(
+                    'POS Warkop Lembong',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.fastfood),
+              title: const Text(
+                'Master Data Menu',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              onTap: () {
+                Navigator.pop(context); // Tutup drawer
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const MasterMenuPage(),
+                  ),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _activeBills.isEmpty
@@ -88,13 +130,12 @@ class _HomePageState extends State<HomePage> {
               itemCount: _activeBills.length,
               itemBuilder: (context, index) {
                 final bill = _activeBills[index];
-                final isPaid = bill.status == 'paid'; // Cek apakah sudah lunas
+                final isPaid = bill.status == 'paid';
 
                 final timeString =
                     "${bill.createdAt.hour.toString().padLeft(2, '0')}:${bill.createdAt.minute.toString().padLeft(2, '0')}";
 
                 return Card(
-                  // Jika lunas = Hijau, jika belum = Merah
                   color: isPaid ? Colors.green.shade100 : Colors.red.shade100,
                   elevation: 2,
                   margin: const EdgeInsets.only(bottom: 12.0),
@@ -124,7 +165,6 @@ class _HomePageState extends State<HomePage> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text('Jam Order: $timeString'),
-                        // Tambahkan teks status kecil di bawah jam
                         Text(
                           isPaid ? 'LUNAS (Menunggu Dapur)' : 'BELUM BAYAR',
                           style: TextStyle(
@@ -154,17 +194,22 @@ class _HomePageState extends State<HomePage> {
                 );
               },
             ),
+
+      // Tombol Plus hitam di pojok kanan bawah
       floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          // Buka nota kosong, lalu refresh halaman setelah kembali dari halaman Bill
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const BillPage()),
-          ).then((_) => _loadActiveBills());
-        },
         backgroundColor: Colors.black,
-        shape: const CircleBorder(),
-        child: const Icon(Icons.add, color: Colors.white, size: 30),
+        onPressed: () async {
+          // Membuka halaman untuk membuat pesanan baru
+          final result = await Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const MenuChoicePage()),
+          );
+
+          if (result == true && mounted) {
+            _loadActiveBills();
+          }
+        },
+        child: const Icon(Icons.add, color: Colors.white),
       ),
     );
   }
