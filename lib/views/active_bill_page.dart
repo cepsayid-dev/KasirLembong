@@ -34,14 +34,20 @@ class _ActiveBillPageState extends State<ActiveBillPage> {
     });
   }
 
-  Future<void> _handleCancelItem(int itemId, String menuName) async {
+  Future<void> _handleCancelItem(
+    int itemId,
+    String menuName,
+    bool isDelivered,
+  ) async {
+    final pesanTeks = isDelivered
+        ? 'Item ini SUDAH DIANTAR. Yakin ingin membatalkan/retur pesanan ini? Tagihan akan hangus.'
+        : 'Yakin ingin mencoret $menuName dari nota? Dapur tidak akan memasak pesanan ini.';
+
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Batalkan Pesanan?'),
-        content: Text(
-          'Yakin ingin mencoret $menuName dari nota? Dapur tidak akan memasak pesanan ini.',
-        ),
+        content: Text(pesanTeks),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -152,15 +158,20 @@ class _ActiveBillPageState extends State<ActiveBillPage> {
                               'Rp ${item.totalPrice.toInt()}',
                               style: textStyle,
                             ),
-                            if (!item.isCancelled && !item.isDelivered) ...[
+                            // Hapus pengecekan isDelivered agar tombol tetap muncul
+                            if (!item.isCancelled) ...[
                               const SizedBox(width: 8),
                               IconButton(
                                 icon: const Icon(
                                   Icons.cancel,
                                   color: Colors.red,
                                 ),
-                                onPressed: () =>
-                                    _handleCancelItem(item.id, item.menuName),
+                                // Tambahkan parameter item.isDelivered
+                                onPressed: () => _handleCancelItem(
+                                  item.id,
+                                  item.menuName,
+                                  item.isDelivered,
+                                ),
                               ),
                             ],
                           ],
