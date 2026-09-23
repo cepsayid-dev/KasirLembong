@@ -6,6 +6,7 @@ import '../providers/bill_provider.dart';
 import '../models/bill_model.dart'; // Impor model baru
 // Tambahkan impor ini di baris paling atas
 import '../models/bill_item_model.dart';
+import '../models/cart_item_model.dart';
 
 class BillService {
   static Future<bool> saveBill(BillProvider provider) async {
@@ -124,6 +125,31 @@ class BillService {
       );
       return true;
     } catch (e) {
+      return false;
+    }
+  }
+
+  // FUNGSI BARU 4: Menyimpan pesanan tambahan ke nota yang sudah ada
+  static Future<bool> addItemsToBill(int billId, List<CartItem> items) async {
+    try {
+      for (var item in items) {
+        await DatabaseHelper.connection.execute(
+          Sql.named(
+            r"INSERT INTO bill_items (bill_id, menu_item_id, menu_name, qty, price, notes) VALUES (@billId, @menuId, @menuName, @qty, @price, @notes)",
+          ),
+          parameters: {
+            'billId': billId,
+            'menuId': item.menuId,
+            'menuName': item.menuName,
+            'qty': item.qty,
+            'price': item.price,
+            'notes': item.notes,
+          },
+        );
+      }
+      return true;
+    } catch (e) {
+      debugPrint("Gagal menambah pesanan: $e");
       return false;
     }
   }

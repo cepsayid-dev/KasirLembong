@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../models/bill_model.dart';
 import '../models/bill_item_model.dart';
 import '../services/bill_service.dart';
+import '../providers/bill_provider.dart';
+import 'menu_choice_page.dart';
 
 class ActiveBillPage extends StatefulWidget {
   final BillModel bill;
@@ -22,6 +25,10 @@ class _ActiveBillPageState extends State<ActiveBillPage> {
   void initState() {
     super.initState();
     _loadItems();
+    // Memastikan keranjang Provider kosong saat halaman pertama dibuka
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Provider.of<BillProvider>(context, listen: false).clearBill();
+    });
   }
 
   Future<void> _loadItems() async {
@@ -81,10 +88,7 @@ class _ActiveBillPageState extends State<ActiveBillPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Pembayaran Berhasil! Nota ditutup.')),
       );
-      Navigator.pop(
-        context,
-        true,
-      ); // Kembali ke Home Page dan bawa nilai 'true'
+      Navigator.pop(context, true);
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Gagal memproses pembayaran.')),
@@ -92,7 +96,6 @@ class _ActiveBillPageState extends State<ActiveBillPage> {
     }
   }
 
-  // Hitung total tagihan hanya dari item yang tidak dicancel
   double get totalTagihan {
     return _items
         .where((item) => !item.isCancelled)
@@ -101,6 +104,9 @@ class _ActiveBillPageState extends State<ActiveBillPage> {
 
   @override
   Widget build(BuildContext context) {
+    // Membaca data keranjang pesanan baru
+    final billProvider = Provider.of<BillProvider>(context);
+
     return Scaffold(
       appBar: AppBar(
         title: Text('Nota #${widget.bill.id} - ${widget.bill.customerName}'),
@@ -111,77 +117,199 @@ class _ActiveBillPageState extends State<ActiveBillPage> {
           : Column(
               children: [
                 Expanded(
-                  child: ListView.separated(
+                  child: SingleChildScrollView(
                     padding: const EdgeInsets.all(12),
-                    itemCount: _items.length,
-                    separatorBuilder: (context, index) => const Divider(),
-                    itemBuilder: (context, index) {
-                      final item = _items[index];
-                      // Logika tampilan untuk pesanan yang dicoret
-                      final textStyle = TextStyle(
-                        fontSize: 16,
-                        decoration: item.isCancelled
-                            ? TextDecoration.lineThrough
-                            : null,
-                        color: item.isCancelled ? Colors.grey : Colors.black,
-                      );
+                    child: Column(
+                      children: [
+                        // --- 1. DAFTAR ITEM LAMA (Dari Database) ---
+                        ..._items.map((item) {
+                          final textStyle = TextStyle(
+                            fontSize: 16,
+                            decoration: item.isCancelled
+                                ? TextDecoration.lineThrough
+                                : null,
+                            color: item.isCancelled
+                                ? Colors.grey
+                                : Colors.black,
+                          );
 
-                      return ListTile(
-                        leading: CircleAvatar(
-                          backgroundColor: item.isCancelled
-                              ? Colors.grey
-                              : (item.isDelivered
-                                    ? Colors.green
-                                    : Colors.orange),
-                          child: Icon(
-                            item.isCancelled
-                                ? Icons.block
-                                : (item.isDelivered
-                                      ? Icons.check
-                                      : Icons.outdoor_grill),
-                            color: Colors.white,
-                          ),
-                        ),
-                        title: Text(
-                          '${item.qty}x ${item.menuName}',
-                          style: textStyle.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        subtitle: item.notes.isNotEmpty
-                            ? Text(item.notes, style: textStyle)
-                            : null,
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              'Rp ${item.totalPrice.toInt()}',
-                              style: textStyle,
+                          return ListTile(
+                            contentPadding: const EdgeInsets.symmetric(
+                              vertical: 4,
                             ),
-                            // Hapus pengecekan isDelivered agar tombol tetap muncul
-                            if (!item.isCancelled) ...[
-                              const SizedBox(width: 8),
-                              IconButton(
-                                icon: const Icon(
-                                  Icons.cancel,
-                                  color: Colors.red,
-                                ),
-                                // Tambahkan parameter item.isDelivered
-                                onPressed: () => _handleCancelItem(
-                                  item.id,
-                                  item.menuName,
-                                  item.isDelivered,
-                                ),
+                            leading: CircleAvatar(
+                              backgroundColor: item.isCancelled
+                                  ? Colors.grey
+                                  : (item.isDelivered
+                                        ? Colors.green
+                                        : Colors.orange),
+                              child: Icon(
+                                item.isCancelled
+                                    ? Icons.block
+                                    : (item.isDelivered
+                                          ? Icons.check
+                                          : Icons.outdoor_grill),
+                                color: Colors.white,
                               ),
-                            ],
-                          ],
-                        ),
-                      );
-                    },
+                            ),
+                            title: Text(
+                              '${item.qty}x ${item.menuName}',
+                              style: textStyle.copyWith(
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            subtitle: item.notes.isNotEmpty
+                                ? Text(item.notes, style: textStyle)
+                                : null,
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  'Rp ${item.totalPrice.toInt()}',
+                                  style: textStyle,
+                                ),
+                                if (!item.isCancelled) ...[
+                                  const SizedBox(width: 8),
+                                  IconButton(
+                                    icon: const Icon(
+                                      Icons.cancel,
+                                      color: Colors.red,
+                                    ),
+                                    onPressed: () => _handleCancelItem(
+                                      item.id,
+                                      item.menuName,
+                                      item.isDelivered,
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          );
+                        }),
+
+                        // --- 2. BLOK ITEM TAMBAHAN (Belum Disimpan) ---
+                        if (billProvider.items.isNotEmpty) ...[
+                          const SizedBox(height: 16),
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.blue.shade50,
+                              border: Border.all(
+                                color: Colors.blue.shade200,
+                                width: 2,
+                              ),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Row(
+                                  children: [
+                                    Icon(
+                                      Icons.new_releases,
+                                      color: Colors.blue,
+                                    ),
+                                    SizedBox(width: 8),
+                                    Text(
+                                      'Pesanan Tambahan',
+                                      style: TextStyle(
+                                        color: Colors.blue,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 16,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const Divider(color: Colors.blue),
+                                ...billProvider.items.map(
+                                  (newItem) => ListTile(
+                                    contentPadding: EdgeInsets.zero,
+                                    leading: const CircleAvatar(
+                                      backgroundColor: Colors.blue,
+                                      child: Icon(
+                                        Icons.add,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                    title: Text(
+                                      '${newItem.qty}x ${newItem.menuName}',
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    subtitle: newItem.notes.isNotEmpty
+                                        ? Text(newItem.notes)
+                                        : null,
+                                    trailing: Text(
+                                      'Rp ${newItem.totalPrice.toInt()}',
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: OutlinedButton(
+                                        onPressed: () =>
+                                            billProvider.clearBill(),
+                                        style: OutlinedButton.styleFrom(
+                                          foregroundColor: Colors.red,
+                                        ),
+                                        child: const Text('Batal'),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      flex: 2,
+                                      child: ElevatedButton(
+                                        onPressed: () async {
+                                          final success =
+                                              await BillService.addItemsToBill(
+                                                widget.bill.id,
+                                                billProvider.items,
+                                              );
+                                          if (success) {
+                                            billProvider.clearBill();
+                                            _loadItems(); // Refresh daftar utama
+                                            if (context.mounted) {
+                                              ScaffoldMessenger.of(context)
+                                                  .showSnackBar(
+                                                    const SnackBar(
+                                                      content: Text(
+                                                        'Pesanan tambahan dikirim ke Dapur!',
+                                                      ),
+                                                    ),
+                                                  );
+                                            }
+                                          }
+                                        },
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: Colors.blue,
+                                          foregroundColor: Colors.white,
+                                        ),
+                                        child: const Text(
+                                          'Simpan & Masak',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
                   ),
                 ),
 
-                // Panel Pembayaran (Bawah)
+                // --- 3. PANEL PEMBAYARAN ---
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
@@ -234,7 +362,10 @@ class _ActiveBillPageState extends State<ActiveBillPage> {
                             backgroundColor: Colors.green,
                             foregroundColor: Colors.white,
                           ),
-                          onPressed: _items.isEmpty ? null : _handleCheckout,
+                          onPressed:
+                              (_items.isEmpty || billProvider.items.isNotEmpty)
+                              ? null
+                              : _handleCheckout,
                           child: const Text(
                             'BAYAR SEKARANG',
                             style: TextStyle(
@@ -249,6 +380,17 @@ class _ActiveBillPageState extends State<ActiveBillPage> {
                 ),
               ],
             ),
+      // Tombol untuk menambah pesanan
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const MenuChoicePage()),
+          );
+        },
+        backgroundColor: Colors.black,
+        child: const Icon(Icons.add_shopping_cart, color: Colors.white),
+      ),
     );
   }
 }
