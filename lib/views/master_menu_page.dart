@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/menu_model.dart';
 import '../services/menu_service.dart';
+import '../services/expense_service.dart';
 
 class MasterMenuPage extends StatefulWidget {
   const MasterMenuPage({super.key});
@@ -13,6 +14,10 @@ class MasterMenuPage extends StatefulWidget {
 class _MasterMenuPageState extends State<MasterMenuPage> {
   List<MenuModel> _menus = [];
   bool _isLoading = true;
+
+  // Variabel untuk Mode Restok Checklist
+  bool _isSelectionMode = false;
+  List<MenuModel> _selectedMenusForRestock = [];
 
   @override
   void initState() {
@@ -67,13 +72,12 @@ class _MasterMenuPageState extends State<MasterMenuPage> {
                     controller: priceController,
                     keyboardType: TextInputType.number,
                     decoration: const InputDecoration(
-                      labelText: 'Harga (Cth: 15000)',
+                      labelText: 'Harga Jual (Cth: 15000)',
                     ),
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
-                    initialValue:
-                        trackingMode, // Sudah diperbaiki menjadi initialValue
+                    initialValue: trackingMode,
                     decoration: const InputDecoration(
                       labelText: 'Mode Lacak Stok',
                     ),
@@ -103,8 +107,7 @@ class _MasterMenuPageState extends State<MasterMenuPage> {
                     )
                   else
                     DropdownButtonFormField<String>(
-                      initialValue:
-                          stockStatus, // Sudah diperbaiki menjadi initialValue
+                      initialValue: stockStatus,
                       decoration: const InputDecoration(
                         labelText: 'Status Ketersediaan',
                       ),
@@ -135,7 +138,6 @@ class _MasterMenuPageState extends State<MasterMenuPage> {
               ),
               ElevatedButton(
                 onPressed: () async {
-                  // Sudah dibungkus kurung kurawal
                   if (nameController.text.isEmpty ||
                       priceController.text.isEmpty) {
                     return;
@@ -164,7 +166,6 @@ class _MasterMenuPageState extends State<MasterMenuPage> {
                     );
                   }
 
-                  // Sudah menggunakan context.mounted
                   if (success && context.mounted) {
                     Navigator.pop(context);
                     _loadMenus();
@@ -207,46 +208,132 @@ class _MasterMenuPageState extends State<MasterMenuPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Master Data Menu')),
+      appBar: AppBar(
+        title: Text(
+          _isSelectionMode
+              ? '${_selectedMenusForRestock.length} Dipilih untuk PO'
+              : 'Master Data Menu',
+        ),
+        actions: [
+          if (_isSelectionMode)
+            IconButton(
+              icon: const Icon(Icons.close),
+              onPressed: () => setState(() {
+                _isSelectionMode = false;
+                _selectedMenusForRestock.clear();
+              }),
+            )
+          else
+            IconButton(
+              icon: const Icon(Icons.checklist),
+              tooltip: 'Buat PO Belanja (Restok)',
+              onPressed: () => setState(() => _isSelectionMode = true),
+            ),
+        ],
+      ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : ListView.builder(
               itemCount: _menus.length,
               itemBuilder: (context, index) {
                 final menu = _menus[index];
-
-                // Menentukan tampilan stok berdasarkan mode
                 String displayStock = menu.trackingMode == 'numeric'
                     ? 'Stok: ${menu.stockQty}'
                     : menu.stockStatus;
+                final isSelected = _selectedMenusForRestock.contains(menu);
 
                 return ListTile(
+                  leading: _isSelectionMode
+                      ? Checkbox(
+                          value: isSelected,
+                          onChanged: (bool? val) {
+                            setState(() {
+                              if (val == true) {
+                                _selectedMenusForRestock.add(menu);
+                              } else {
+                                _selectedMenusForRestock.remove(menu);
+                              }
+                            });
+                          },
+                        )
+                      : null, // Sembunyikan checkbox jika tidak sedang mode restok
                   title: Text(
                     menu.name,
                     style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
                   subtitle: Text('Rp ${menu.price.toInt()} | $displayStock'),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.edit, color: Colors.blue),
-                        onPressed: () => _showMenuForm(existingMenu: menu),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.delete, color: Colors.red),
-                        onPressed: () => _deleteMenu(menu.id, menu.name),
-                      ),
-                    ],
-                  ),
+                  trailing: _isSelectionMode
+                      ? null
+                      : Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.edit, color: Colors.blue),
+                              onPressed: () =>
+                                  _showMenuForm(existingMenu: menu),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.delete, color: Colors.red),
+                              onPressed: () => _deleteMenu(menu.id, menu.name),
+                            ),
+                          ],
+                        ),
+                  onTap: _isSelectionMode
+                      ? () {
+                          setState(() {
+                            if (isSelected) {
+                              _selectedMenusForRestock.remove(menu);
+                            } else {
+                              _selectedMenusForRestock.add(menu);
+                            }
+                          });
+                        }
+                      : null,
                 );
               },
             ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _showMenuForm,
-        backgroundColor: Colors.black,
-        child: const Icon(Icons.add, color: Colors.white),
-      ),
+
+      // Tombol Mengambang (Berubah sesuai mode)
+      floatingActionButton: _isSelectionMode
+          ? FloatingActionButton.extended(
+              backgroundColor: Colors.blue,
+              onPressed: () async {
+                if (_selectedMenusForRestock.isEmpty) return;
+
+                final success = await ExpenseService.createDraftRestock(
+                  _selectedMenusForRestock,
+                );
+                if (success && context.mounted) {
+                  setState(() {
+                    _isSelectionMode = false;
+                    _selectedMenusForRestock.clear();
+                  });
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        'Nota PO Belanja dibuat! Cek di Menu Pengeluaran.',
+                      ),
+                    ),
+                  );
+                }
+              },
+              icon: const Icon(
+                Icons.shopping_cart_checkout,
+                color: Colors.white,
+              ),
+              label: const Text(
+                'Buat PO Restok',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            )
+          : FloatingActionButton(
+              onPressed: _showMenuForm,
+              backgroundColor: Colors.black,
+              child: const Icon(Icons.add, color: Colors.white),
+            ),
     );
   }
 }

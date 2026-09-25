@@ -7,7 +7,7 @@ import 'active_bill_page.dart';
 import 'history_page.dart';
 import 'master_menu_page.dart';
 import 'order_page.dart';
-import 'menu_choice_page.dart'; // Sesuaikan jika nama halaman menu Anda berbeda
+import 'expense_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -110,6 +110,20 @@ class _HomePageState extends State<HomePage> {
                   MaterialPageRoute(
                     builder: (context) => const MasterMenuPage(),
                   ),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.money_off, color: Colors.red),
+              title: const Text(
+                'Kas Keluar (Belanja)',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              onTap: () {
+                Navigator.pop(context); // Tutup drawer
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const ExpensePage()),
                 );
               },
             ),
