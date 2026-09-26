@@ -5,6 +5,7 @@ import '../models/bill_model.dart';
 import '../models/bill_item_model.dart';
 import '../services/bill_service.dart';
 import '../providers/bill_provider.dart';
+import '../services/print_service.dart'; // Tambahkan import Print Service
 import 'menu_choice_page.dart';
 
 class ActiveBillPage extends StatefulWidget {
@@ -19,7 +20,7 @@ class ActiveBillPage extends StatefulWidget {
 class _ActiveBillPageState extends State<ActiveBillPage> {
   List<BillItemModel> _items = [];
   bool _isLoading = true;
-  String _paymentMethod = 'Cash';
+  String _paymentMethod = 'Cash'; // Default metode pembayaran
 
   @override
   void initState() {
@@ -77,23 +78,154 @@ class _ActiveBillPageState extends State<ActiveBillPage> {
     }
   }
 
+  // FUNGSI CHECKOUT YANG DIPERBARUI
   Future<void> _handleCheckout() async {
-    final success = await BillService.checkoutBill(
-      widget.bill.id,
-      _paymentMethod,
-    );
-    if (!mounted) return;
+    // JIKA QRIS: Langsung bayar tanpa pop-up input uang
+    if (_paymentMethod == 'QRIS') {
+      final success = await BillService.checkoutBill(widget.bill.id, 'QRIS');
 
-    if (success) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Pembayaran Berhasil! Nota ditutup.')),
-      );
-      Navigator.pop(context, true);
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Gagal memproses pembayaran.')),
-      );
+      // Hentikan eksekusi jika halaman sudah keburu ditutup
+      if (!mounted) return;
+
+      if (success) {
+        _showSuccessPrintDialog(totalTagihan, totalTagihan, 0);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Gagal memproses pembayaran.')),
+        );
+      }
+      return;
     }
+
+    // JIKA CASH: Tampilkan Pop-up input uang pelanggan
+    final cashController = TextEditingController(
+      text: totalTagihan.toInt().toString(),
+    );
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text('Pembayaran Tunai'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Total Tagihan: Rp ${totalTagihan.toInt()}',
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: cashController,
+              keyboardType: TextInputType.number,
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              decoration: const InputDecoration(
+                labelText: 'Uang Diterima (Rp)',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Batal'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () async {
+              final cashAmount = double.tryParse(cashController.text) ?? 0;
+
+              if (cashAmount < totalTagihan) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Uang kurang dari tagihan!')),
+                );
+                return;
+              }
+
+              final success = await BillService.checkoutBill(
+                widget.bill.id,
+                'Cash',
+              );
+              if (success && context.mounted) {
+                Navigator.pop(context); // Tutup pop-up input uang
+                final kembalian = cashAmount - totalTagihan;
+                _showSuccessPrintDialog(totalTagihan, cashAmount, kembalian);
+              }
+            },
+            child: const Text('LUNASKAN'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // FUNGSI POP-UP KEMBALIAN & CETAK STRUK
+  void _showSuccessPrintDialog(double total, double cash, double change) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        title: const Column(
+          children: [
+            Icon(Icons.check_circle, color: Colors.green, size: 50),
+            SizedBox(height: 8),
+            Text('Lunas!', style: TextStyle(fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Kembalian:', style: TextStyle(fontSize: 16)),
+            Text(
+              'Rp ${change.toInt()}',
+              style: const TextStyle(
+                fontSize: 28,
+                fontWeight: FontWeight.bold,
+                color: Colors.red,
+              ),
+            ),
+          ],
+        ),
+        actionsAlignment: MainAxisAlignment.spaceEvenly,
+        actions: [
+          // TOMBOL 1: Selesai Tanpa Cetak
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context); // Tutup dialog ini
+              Navigator.pop(context, true); // Kembali ke halaman utama (Home)
+            },
+            child: const Text(
+              'Selesai',
+              style: TextStyle(color: Colors.grey, fontSize: 16),
+            ),
+          ),
+          // TOMBOL 2: Cetak Struk
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blue,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () {
+              PrintService.printReceipt(
+                bill: widget.bill,
+                items: _items,
+                totalAmount: total,
+                cashAmount: cash,
+                changeAmount: change,
+              );
+              // Tidak menutup dialog otomatis agar kasir bisa klik 'Selesai' jika ngeprint sudah beres
+            },
+            icon: const Icon(Icons.print),
+            label: const Text('Cetak Struk'),
+          ),
+        ],
+      ),
+    );
   }
 
   double get totalTagihan {
@@ -104,7 +236,6 @@ class _ActiveBillPageState extends State<ActiveBillPage> {
 
   @override
   Widget build(BuildContext context) {
-    // Membaca data keranjang pesanan baru
     final billProvider = Provider.of<BillProvider>(context);
 
     return Scaffold(
@@ -310,9 +441,7 @@ class _ActiveBillPageState extends State<ActiveBillPage> {
                 ),
 
                 // --- 3. PANEL PEMBAYARAN ---
-                // --- 3. PANEL PEMBAYARAN ---
-                if (widget.bill.status ==
-                    'unpaid') // Hanya tampil jika belum dibayar
+                if (widget.bill.status == 'unpaid')
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
@@ -344,6 +473,8 @@ class _ActiveBillPageState extends State<ActiveBillPage> {
                           ],
                         ),
                         const SizedBox(height: 16),
+
+                        // Pemilihan Cash / QRIS menggunakan UI bawaan Anda sebelumnya
                         SegmentedButton<String>(
                           segments: const [
                             ButtonSegment(
@@ -383,7 +514,6 @@ class _ActiveBillPageState extends State<ActiveBillPage> {
                     ),
                   )
                 else
-                  // Jika sudah lunas, tampilkan banner info saja
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(16),
@@ -399,7 +529,6 @@ class _ActiveBillPageState extends State<ActiveBillPage> {
                   ),
               ],
             ),
-      // Tombol untuk menambah pesanan
       floatingActionButton: FloatingActionButton(
         onPressed: () {
           Navigator.push(
