@@ -12,7 +12,7 @@ class DatabaseHelper {
           host: dotenv.env['DB_HOST'] ?? 'localhost',
           database: dotenv.env['DB_NAME'] ?? 'postgres',
           username: dotenv.env['DB_USER'] ?? 'postgres',
-          password: dotenv.env['DB_PASSWORD'] ?? '',
+          password: dotenv.env['DB_PASSWORD'] ?? 'esotpisan12',
           port: int.parse(dotenv.env['DB_PORT'] ?? '5432'),
         ),
         settings: ConnectionSettings(

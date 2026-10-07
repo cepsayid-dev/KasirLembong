@@ -7,11 +7,11 @@ import '../models/menu_model.dart';
 class MenuService {
   static Future<List<MenuModel>> fetchMenus({String keyword = ''}) async {
     try {
+      // TAMBAHAN: Memanggil kolom 'category' dari database
       final query = keyword.isEmpty
-          ? 'SELECT id, name, price, tracking_mode, stock_qty, stock_status FROM menu_items ORDER BY name ASC'
-          : "SELECT id, name, price, tracking_mode, stock_qty, stock_status FROM menu_items WHERE name ILIKE '%$keyword%' ORDER BY name ASC";
+          ? 'SELECT id, name, price, tracking_mode, stock_qty, stock_status, category FROM menu_items ORDER BY name ASC'
+          : "SELECT id, name, price, tracking_mode, stock_qty, stock_status, category FROM menu_items WHERE name ILIKE '%$keyword%' ORDER BY name ASC";
 
-      // Tanda seru (!) dihapus disini
       final results = await DatabaseHelper.connection.execute(query);
 
       List<MenuModel> menus = [];
@@ -24,6 +24,7 @@ class MenuService {
             trackingMode: row[3] as String,
             stockQty: row[4] as int,
             stockStatus: row[5] as String,
+            category: row[6] as String? ?? 'Makanan', // Ambil data kategori
           ),
         );
       }
@@ -34,18 +35,19 @@ class MenuService {
     }
   }
 
-  // FUNGSI BARU 1: Tambah Menu
+  // TAMBAHAN: Parameter 'category' disisipkan ke database
   static Future<bool> addMenu(
     String name,
     double price,
     String trackingMode,
     int stockQty,
     String stockStatus,
+    String category,
   ) async {
     try {
       await DatabaseHelper.connection.execute(
         Sql.named(
-          "INSERT INTO menu_items (name, price, tracking_mode, stock_qty, stock_status) VALUES (@name, @price, @mode, @qty, @status)",
+          "INSERT INTO menu_items (name, price, tracking_mode, stock_qty, stock_status, category) VALUES (@name, @price, @mode, @qty, @status, @category)",
         ),
         parameters: {
           'name': name,
@@ -53,6 +55,7 @@ class MenuService {
           'mode': trackingMode,
           'qty': stockQty,
           'status': stockStatus,
+          'category': category,
         },
       );
       return true;
@@ -62,7 +65,7 @@ class MenuService {
     }
   }
 
-  // FUNGSI BARU 2: Update Menu
+  // TAMBAHAN: Update parameter 'category'
   static Future<bool> updateMenu(
     int id,
     String name,
@@ -70,11 +73,12 @@ class MenuService {
     String trackingMode,
     int stockQty,
     String stockStatus,
+    String category,
   ) async {
     try {
       await DatabaseHelper.connection.execute(
         Sql.named(
-          "UPDATE menu_items SET name = @name, price = @price, tracking_mode = @mode, stock_qty = @qty, stock_status = @status WHERE id = @id",
+          "UPDATE menu_items SET name = @name, price = @price, tracking_mode = @mode, stock_qty = @qty, stock_status = @status, category = @category WHERE id = @id",
         ),
         parameters: {
           'id': id,
@@ -83,6 +87,7 @@ class MenuService {
           'mode': trackingMode,
           'qty': stockQty,
           'status': stockStatus,
+          'category': category,
         },
       );
       return true;
@@ -92,7 +97,6 @@ class MenuService {
     }
   }
 
-  // FUNGSI BARU 3: Hapus Menu
   static Future<bool> deleteMenu(int id) async {
     try {
       await DatabaseHelper.connection.execute(
