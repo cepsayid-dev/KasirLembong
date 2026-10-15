@@ -6,16 +6,15 @@ import '../models/cart_item_model.dart';
 import '../providers/bill_provider.dart';
 import '../services/menu_service.dart';
 
-class ChoiceDetailPage extends StatefulWidget {
+class ChoiceDetailSheet extends StatefulWidget {
   final MenuModel menu;
-
-  const ChoiceDetailPage({super.key, required this.menu});
+  const ChoiceDetailSheet({super.key, required this.menu});
 
   @override
-  State<ChoiceDetailPage> createState() => _ChoiceDetailPageState();
+  State<ChoiceDetailSheet> createState() => _ChoiceDetailSheetState();
 }
 
-class _ChoiceDetailPageState extends State<ChoiceDetailPage> {
+class _ChoiceDetailSheetState extends State<ChoiceDetailSheet> {
   int _qty = 1;
   final TextEditingController _notesController = TextEditingController();
 
@@ -34,7 +33,6 @@ class _ChoiceDetailPageState extends State<ChoiceDetailPage> {
     'Telur Matang': 5000,
   };
   final List<String> _selectedPaidToppings = [];
-
   final List<String> _toppingGratis = ['Sayur', 'Cabe', 'Chili Oil'];
   final List<String> _selectedFreeToppings = [];
 
@@ -81,13 +79,27 @@ class _ChoiceDetailPageState extends State<ChoiceDetailPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Detail Pesanan'), centerTitle: true),
-      body: Column(
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.85,
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: Column(
         children: [
+          Container(
+            margin: const EdgeInsets.symmetric(vertical: 12),
+            height: 5,
+            width: 50,
+            decoration: BoxDecoration(
+              color: Colors.grey.shade400,
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+
           Expanded(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.all(16.0),
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -95,7 +107,7 @@ class _ChoiceDetailPageState extends State<ChoiceDetailPage> {
                     child: Text(
                       widget.menu.name,
                       style: const TextStyle(
-                        fontSize: 26,
+                        fontSize: 24,
                         fontWeight: FontWeight.bold,
                       ),
                       textAlign: TextAlign.center,
@@ -135,7 +147,9 @@ class _ChoiceDetailPageState extends State<ChoiceDetailPage> {
                             ),
                           ),
                           IconButton(
-                            onPressed: () => setState(() => _qty++),
+                            onPressed: () {
+                              setState(() => _qty++);
+                            },
                             icon: const Icon(
                               Icons.add_circle_outline,
                               size: 30,
@@ -226,7 +240,6 @@ class _ChoiceDetailPageState extends State<ChoiceDetailPage> {
                         final currentRasaList = _varianRasaList
                             .where((m) => m.category == 'Rasa $_mieType')
                             .toList();
-
                         if (_varianRasaList.isEmpty) {
                           return const Text('Memuat varian rasa...');
                         }
@@ -349,6 +362,9 @@ class _ChoiceDetailPageState extends State<ChoiceDetailPage> {
                       hintText: 'Cth: Jangan terlalu manis, pedas mampus...',
                     ),
                   ),
+                  SizedBox(
+                    height: MediaQuery.of(context).viewInsets.bottom + 20,
+                  ),
                 ],
               ),
             ),
@@ -379,11 +395,9 @@ class _ChoiceDetailPageState extends State<ChoiceDetailPage> {
                 ),
                 onPressed: () {
                   List<String> finalNotesList = [];
-
                   if (isMinuman) {
                     finalNotesList.add("[$_tempType]");
                   }
-
                   if (isIndomie) {
                     String mieInfo = "[$_mieType";
                     if (_selectedRasa != null) {
@@ -392,43 +406,36 @@ class _ChoiceDetailPageState extends State<ChoiceDetailPage> {
                     mieInfo += "]";
                     finalNotesList.add(mieInfo);
                   }
-
                   if (_selectedPaidToppings.isNotEmpty) {
                     finalNotesList.add(
                       "+Topping: ${_selectedPaidToppings.join(', ')}",
                     );
                   }
-
                   if (_selectedFreeToppings.isNotEmpty) {
                     finalNotesList.add(
                       "+Gratis: ${_selectedFreeToppings.join(', ')}",
                     );
                   }
-
                   if (_notesController.text.isNotEmpty) {
                     finalNotesList.add("Catatan: ${_notesController.text}");
                   }
-
-                  final finalNotes = finalNotesList.join(" | ");
 
                   final item = CartItem(
                     menuId: widget.menu.id,
                     menuName: widget.menu.name,
                     price: currentUnitPrice,
                     qty: _qty,
-                    notes: finalNotes,
+                    notes: finalNotesList.join(" | "),
                   );
 
                   Provider.of<BillProvider>(
                     context,
                     listen: false,
                   ).addItem(item);
-                  Navigator.pop(context);
 
+                  Navigator.pop(context);
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('${widget.menu.name} ditambahkan ke nota!'),
-                    ),
+                    SnackBar(content: Text('${widget.menu.name} ditambahkan!')),
                   );
                 },
                 child: Text(

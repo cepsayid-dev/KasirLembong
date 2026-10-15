@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../models/menu_model.dart';
 import '../services/menu_service.dart';
+import '../providers/bill_provider.dart';
 import 'choice_detail_page.dart';
 
 class MenuChoicePage extends StatefulWidget {
@@ -76,7 +78,9 @@ class _MenuChoicePageState extends State<MenuChoicePage> {
       String bestPrefix = currentWords.first;
 
       for (var other in menus) {
-        if (menu.id == other.id) continue;
+        if (menu.id == other.id) {
+          continue;
+        }
         List<String> otherWords = other.name.trim().split(RegExp(r'\s+'));
         int matchCount = 0;
         for (int i = 0; i < currentWords.length && i < otherWords.length; i++) {
@@ -246,15 +250,16 @@ class _MenuChoicePageState extends State<MenuChoicePage> {
                               ),
                               onTap: isClickable
                                   ? () async {
-                                      await Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (context) =>
-                                              ChoiceDetailPage(menu: menu),
-                                        ),
+                                      await showModalBottomSheet(
+                                        context: context,
+                                        isScrollControlled: true,
+                                        backgroundColor: Colors.transparent,
+                                        builder: (context) =>
+                                            ChoiceDetailSheet(menu: menu),
                                       );
 
-                                      if (mounted && _searchQuery.isNotEmpty) {
+                                      if (context.mounted &&
+                                          _searchQuery.isNotEmpty) {
                                         _searchController.clear();
                                         setState(() => _searchQuery = '');
                                       }
@@ -268,6 +273,48 @@ class _MenuChoicePageState extends State<MenuChoicePage> {
                   ),
           ),
         ],
+      ),
+
+      bottomNavigationBar: Consumer<BillProvider>(
+        builder: (context, billProvider, child) {
+          if (billProvider.items.isEmpty) {
+            return const SizedBox.shrink();
+          }
+
+          return Container(
+            padding: const EdgeInsets.all(16),
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black12,
+                  blurRadius: 10,
+                  offset: Offset(0, -5),
+                ),
+              ],
+            ),
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.black,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              onPressed: () {
+                Navigator.pop(context);
+              },
+              child: Text(
+                'LIHAT NOTA (${billProvider.items.length} ITEM) - Rp ${billProvider.totalBill.toInt()}',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          );
+        },
       ),
     );
   }

@@ -7,6 +7,7 @@ class BillItemModel {
   final String notes;
   final bool isDelivered;
   final bool isCancelled;
+  final bool isPaid; // VARIABEL BARU
 
   BillItemModel({
     required this.id,
@@ -17,6 +18,7 @@ class BillItemModel {
     required this.notes,
     required this.isDelivered,
     required this.isCancelled,
+    required this.isPaid, // VARIABEL BARU
   });
 
   double get totalPrice => qty * price;

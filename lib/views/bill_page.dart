@@ -3,20 +3,21 @@ import 'package:provider/provider.dart';
 
 import '../providers/bill_provider.dart';
 import '../services/bill_service.dart';
+import '../models/bill_model.dart';
 import 'menu_choice_page.dart';
+import 'active_bill_page.dart';
 
 class BillPage extends StatelessWidget {
   const BillPage({super.key});
 
   @override
   Widget build(BuildContext context) {
-    // Membaca tanggal hari ini
     final String currentDate =
         "${DateTime.now().day}/${DateTime.now().month}/${DateTime.now().year}";
     final billProvider = Provider.of<BillProvider>(context);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Nota Pesanan'), centerTitle: true),
+      appBar: AppBar(title: const Text('Buat Pesanan Baru'), centerTitle: true),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -60,7 +61,7 @@ class BillPage extends StatelessWidget {
               child: const Row(
                 children: [
                   SizedBox(
-                    width: 40,
+                    width: 35,
                     child: Center(
                       child: Text(
                         'Qty',
@@ -77,7 +78,7 @@ class BillPage extends StatelessWidget {
                     ),
                   ),
                   SizedBox(
-                    width: 80,
+                    width: 70,
                     child: Center(
                       child: Text(
                         'Price',
@@ -86,7 +87,7 @@ class BillPage extends StatelessWidget {
                     ),
                   ),
                   SizedBox(
-                    width: 80,
+                    width: 70,
                     child: Center(
                       child: Text(
                         'Total',
@@ -94,6 +95,7 @@ class BillPage extends StatelessWidget {
                       ),
                     ),
                   ),
+                  SizedBox(width: 40),
                 ],
               ),
             ),
@@ -123,12 +125,25 @@ class BillPage extends StatelessWidget {
                           );
                         },
                         child: const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 8.0),
+                          padding: EdgeInsets.symmetric(vertical: 12.0),
                           child: Center(
-                            child: Icon(
-                              Icons.add,
-                              size: 30,
-                              color: Colors.black,
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.add_circle,
+                                  size: 24,
+                                  color: Colors.blue,
+                                ),
+                                SizedBox(width: 8),
+                                Text(
+                                  'Tambah Menu',
+                                  style: TextStyle(
+                                    color: Colors.blue,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ),
@@ -136,111 +151,255 @@ class BillPage extends StatelessWidget {
                     }
 
                     final item = billProvider.items[index];
-                    return Row(
-                      children: [
-                        SizedBox(
-                          width: 40,
-                          child: Center(child: Text('${item.qty}')),
-                        ),
-                        Expanded(
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 4.0,
-                            ),
-                            child: Text(
-                              item.menuName,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
+                    return Dismissible(
+                      key: ValueKey('${item.menuId}_$index'),
+                      direction: DismissDirection.endToStart,
+                      background: Container(
+                        alignment: Alignment.centerRight,
+                        padding: const EdgeInsets.only(right: 12),
+                        color: Colors.red,
+                        child: const Icon(Icons.delete, color: Colors.white),
+                      ),
+                      onDismissed: (_) {
+                        billProvider.removeItem(index);
+                      },
+                      child: Row(
+                        children: [
+                          SizedBox(
+                            width: 35,
+                            child: Center(
+                              child: Text(
+                                '${item.qty}',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
                             ),
                           ),
-                        ),
-                        SizedBox(
-                          width: 80,
-                          child: Center(child: Text('${item.price.toInt()}')),
-                        ),
-                        SizedBox(
-                          width: 80,
-                          child: Center(
-                            child: Text('${item.totalPrice.toInt()}'),
+                          Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 4.0,
+                                vertical: 4.0,
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    item.menuName,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  if (item.notes.isNotEmpty)
+                                    Text(
+                                      item.notes,
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        color: Colors.black54,
+                                      ),
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                ],
+                              ),
+                            ),
                           ),
-                        ),
-                      ],
+                          SizedBox(
+                            width: 70,
+                            child: Center(child: Text('${item.price.toInt()}')),
+                          ),
+                          SizedBox(
+                            width: 70,
+                            child: Center(
+                              child: Text('${item.totalPrice.toInt()}'),
+                            ),
+                          ),
+                          SizedBox(
+                            width: 40,
+                            child: IconButton(
+                              padding: EdgeInsets.zero,
+                              icon: const Icon(
+                                Icons.close,
+                                color: Colors.red,
+                                size: 20,
+                              ),
+                              onPressed: () => billProvider.removeItem(index),
+                            ),
+                          ),
+                        ],
+                      ),
                     );
                   },
-                ),
-              ),
-            ),
-
-            Align(
-              alignment: Alignment.centerRight,
-              child: Container(
-                width: 200,
-                padding: const EdgeInsets.all(8.0),
-                decoration: const BoxDecoration(
-                  border: Border(
-                    left: BorderSide(),
-                    right: BorderSide(),
-                    bottom: BorderSide(),
-                  ),
-                ),
-                child: Text(
-                  'Total Bill = Rp ${billProvider.totalBill.toInt()}',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
                 ),
               ),
             ),
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () async {
-          // Validasi: Pastikan keranjang tidak kosong
-          if (billProvider.items.isEmpty) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text(
-                  'Nota masih kosong, tambahkan menu terlebih dahulu!',
-                ),
-              ),
-            );
-            return;
-          }
 
-          // Proses simpan
-          bool success = await BillService.saveBill(billProvider);
-
-          if (success) {
-            billProvider.clearBill();
-
-            if (context.mounted) {
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text(
-                    'Nota berhasil disimpan dengan status Belum Bayar (Merah)!',
-                  ),
-                ),
-              );
-            }
-          } else {
-            if (context.mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Gagal menyimpan nota ke database'),
-                ),
-              );
-            }
-          }
-        },
-        shape: const CircleBorder(
-          side: BorderSide(color: Colors.black, width: 1),
+      // PANEL BAWAH BERISI 2 TOMBOL AKSI
+      bottomNavigationBar: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black12,
+              blurRadius: 10,
+              offset: Offset(0, -5),
+            ),
+          ],
         ),
-        backgroundColor: Colors.white,
-        elevation: 0,
-        child: const Icon(Icons.check, color: Colors.black),
+        child: SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Total Tagihan',
+                    style: TextStyle(
+                      color: Colors.grey,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                  Text(
+                    'Rp ${billProvider.totalBill.toInt()}',
+                    style: const TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  // TOMBOL 1: SIMPAN (TAPI BELUM BAYAR)
+                  Expanded(
+                    flex: 1,
+                    child: SizedBox(
+                      height: 50,
+                      child: OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(
+                            color: Colors.orange,
+                            width: 2,
+                          ),
+                          foregroundColor: Colors.orange,
+                        ),
+                        onPressed: billProvider.items.isEmpty
+                            ? null
+                            : () async {
+                                final billId = await BillService.saveBill(
+                                  billProvider,
+                                );
+                                if (!context.mounted) return;
+
+                                if (billId != null) {
+                                  billProvider.clearBill();
+                                  Navigator.pop(context, true);
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text(
+                                        'Nota disimpan ke antrean (Belum Bayar)',
+                                      ),
+                                    ),
+                                  );
+                                } else {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Gagal menyimpan nota'),
+                                    ),
+                                  );
+                                }
+                              },
+                        child: const Text(
+                          'SIMPAN AJA',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+
+                  // TOMBOL 2: LANGSUNG BAYAR (LEMPAR KE HALAMAN PEMBAYARAN)
+                  Expanded(
+                    flex: 2,
+                    child: SizedBox(
+                      height: 50,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green,
+                          foregroundColor: Colors.white,
+                        ),
+                        onPressed: billProvider.items.isEmpty
+                            ? null
+                            : () async {
+                                final billId = await BillService.saveBill(
+                                  billProvider,
+                                );
+                                if (!context.mounted) return;
+
+                                if (billId != null) {
+                                  // 1. Simpan nama tamu sebelum keranjang dikosongkan
+                                  final namaTamu =
+                                      billProvider.customerName.isEmpty
+                                      ? 'Guest'
+                                      : billProvider.customerName;
+
+                                  // 2. Kosongkan keranjang
+                                  billProvider.clearBill();
+
+                                  // 3. Buat model nota sementara untuk dilempar ke halaman ActiveBillPage
+                                  final newBill = BillModel(
+                                    id: billId,
+                                    customerName: namaTamu,
+                                    createdAt: DateTime.now(),
+                                    status: 'unpaid',
+                                    isAllDelivered: false,
+                                  );
+
+                                  // 4. Tutup halaman keranjang dan ganti dengan halaman pembayaran
+                                  Navigator.pushReplacement(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) =>
+                                          ActiveBillPage(bill: newBill),
+                                    ),
+                                  );
+                                } else {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Gagal menyimpan nota'),
+                                    ),
+                                  );
+                                }
+                              },
+                        child: const Text(
+                          'LANGSUNG BAYAR',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

@@ -11,7 +11,7 @@ class HistoryService {
                COALESCE(SUM(bi.qty * bi.price), 0) as grand_total
         FROM bills b
         LEFT JOIN bill_items bi ON b.id = bi.bill_id AND bi.is_cancelled = FALSE
-        WHERE b.status = 'paid' 
+        WHERE b.status = 'closed' 
         GROUP BY b.id, b.customer_name, b.created_at, b.payment_method
         ORDER BY b.created_at DESC
         """);

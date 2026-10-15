@@ -20,6 +20,12 @@ class BillProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  // Fungsi menghapus pesanan dari keranjang kasir
+  void removeItem(int index) {
+    _items.removeAt(index);
+    notifyListeners();
+  }
+
   // Menghitung total tagihan saat ini
   double get totalBill {
     double total = 0;

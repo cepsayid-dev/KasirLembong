@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../models/history_bill_model.dart';
+import '../models/bill_model.dart';
 import '../services/history_service.dart';
+import 'active_bill_page.dart';
 
 class HistoryPage extends StatefulWidget {
   const HistoryPage({super.key});
@@ -11,7 +13,6 @@ class HistoryPage extends StatefulWidget {
 }
 
 class _HistoryPageState extends State<HistoryPage> {
-  // Struktur: Map<Tahun, Map<Bulan, Map<Hari, List<Nota>>>>
   Map<int, Map<int, Map<int, List<HistoryBill>>>> _groupedData = {};
   bool _isLoading = true;
 
@@ -84,7 +85,6 @@ class _HistoryPageState extends State<HistoryPage> {
                 Map<int, Map<int, List<HistoryBill>>> monthsData =
                     _groupedData[year]!;
 
-                // Hitung Total Tahunan (Hanya Grand Total)
                 double yearlyTotal = monthsData.values
                     .expand((days) => days.values)
                     .expand((bills) => bills)
@@ -97,7 +97,6 @@ class _HistoryPageState extends State<HistoryPage> {
                     side: const BorderSide(color: Colors.black87, width: 2),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  // TINGKAT 1: TAHUN
                   child: ExpansionTile(
                     title: Text(
                       'Tahun $year',
@@ -116,12 +115,10 @@ class _HistoryPageState extends State<HistoryPage> {
                     children: monthsData.keys.map((month) {
                       Map<int, List<HistoryBill>> daysData = monthsData[month]!;
 
-                      // Hitung Total Bulanan (Hanya Grand Total)
                       double monthlyTotal = daysData.values
                           .expand((bills) => bills)
                           .fold(0, (sum, bill) => sum + bill.totalAmount);
 
-                      // TINGKAT 2: BULAN
                       return ExpansionTile(
                         title: Text(
                           _monthNames[month],
@@ -137,7 +134,6 @@ class _HistoryPageState extends State<HistoryPage> {
                         children: daysData.keys.map((day) {
                           List<HistoryBill> billsInDay = daysData[day]!;
 
-                          // Hitung Total Harian (Ada Cash dan QRIS)
                           double dailyCash = billsInDay
                               .where((b) => b.paymentMethod == 'Cash')
                               .fold(0, (s, b) => s + b.totalAmount);
@@ -146,7 +142,6 @@ class _HistoryPageState extends State<HistoryPage> {
                               .fold(0, (s, b) => s + b.totalAmount);
                           double dailyTotal = dailyCash + dailyQris;
 
-                          // TINGKAT 3: HARI
                           return ExpansionTile(
                             title: Text(
                               '$day ${_monthNames[month]} $year',
@@ -163,7 +158,6 @@ class _HistoryPageState extends State<HistoryPage> {
                               ),
                             ),
                             children: [
-                              // Rincian Cash & QRIS (Hanya muncul di tingkat harian)
                               Container(
                                 color: Colors.blueGrey.shade50,
                                 padding: const EdgeInsets.all(12),
@@ -186,7 +180,7 @@ class _HistoryPageState extends State<HistoryPage> {
                               ),
                               const Divider(height: 1, color: Colors.black26),
 
-                              // Daftar Nota di hari tersebut
+                              // DAFTAR NOTA YANG BISA DIKLIK ULANG
                               ...billsInDay.map((bill) {
                                 final timeStr =
                                     "${bill.createdAt.hour.toString().padLeft(2, '0')}:${bill.createdAt.minute.toString().padLeft(2, '0')}";
@@ -202,13 +196,31 @@ class _HistoryPageState extends State<HistoryPage> {
                                   title: Text(
                                     'Nota #${bill.id} - ${bill.customerName}',
                                   ),
-                                  subtitle: Text(timeStr),
+                                  subtitle: Text(
+                                    '$timeStr (Klik untuk lihat/cetak)',
+                                  ),
                                   trailing: Text(
                                     'Rp ${bill.totalAmount.toInt()}',
                                     style: const TextStyle(
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),
+                                  onTap: () {
+                                    // Buka kembali nota arsip
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) => ActiveBillPage(
+                                          bill: BillModel(
+                                            id: bill.id,
+                                            customerName: bill.customerName,
+                                            createdAt: bill.createdAt,
+                                            status: 'closed', // Status closed
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  },
                                 );
                               }),
                             ],
