@@ -8,25 +8,21 @@ class BillProvider extends ChangeNotifier {
 
   List<CartItem> get items => _items;
 
-  // Mengubah nama pelanggan (A.N)
   void setCustomerName(String name) {
     customerName = name;
     notifyListeners();
   }
 
-  // Menambah menu ke nota
   void addItem(CartItem item) {
     _items.add(item);
     notifyListeners();
   }
 
-  // Fungsi menghapus pesanan dari keranjang kasir
   void removeItem(int index) {
     _items.removeAt(index);
     notifyListeners();
   }
 
-  // Menghitung total tagihan saat ini
   double get totalBill {
     double total = 0;
     for (var item in _items) {
@@ -37,7 +33,6 @@ class BillProvider extends ChangeNotifier {
     return total;
   }
 
-  // Mereset nota setelah disimpan
   void clearBill() {
     customerName = '';
     _items.clear();

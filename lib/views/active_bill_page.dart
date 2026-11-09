@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../models/bill_model.dart';
 import '../models/bill_item_model.dart';
-import '../services/bill_service.dart';
+import '../services/isar_service.dart';
 import '../providers/bill_provider.dart';
 import '../services/print_service.dart';
 import 'menu_choice_page.dart';
@@ -34,15 +34,21 @@ class _ActiveBillPageState extends State<ActiveBillPage> {
   }
 
   Future<void> _loadItems() async {
-    setState(() => _isLoading = true);
-    final items = await BillService.getBillItems(widget.bill.id);
-    if (!mounted) {
+    setState(() {
+      _isLoading = true;
+    });
+
+    final items = await IsarService.getBillItems(widget.bill.uuid);
+
+    if (!context.mounted) {
       return;
     }
+
     setState(() {
       _items = items;
       _isLoading = false;
 
+      // Jika nota sudah kosong (semua dicancel) dan belum dibayar, tutup halaman
       if (items.isNotEmpty &&
           items.every((i) => i.isPaid || i.isCancelled) &&
           widget.bill.status == 'unpaid') {
@@ -53,10 +59,9 @@ class _ActiveBillPageState extends State<ActiveBillPage> {
 
   Future<void> _editCustomerName() async {
     final nameController = TextEditingController(text: _customerName);
-
     final newName = await showDialog<String>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('Edit Nama Pelanggan'),
         content: TextField(
           controller: nameController,
@@ -68,7 +73,7 @@ class _ActiveBillPageState extends State<ActiveBillPage> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text('Batal'),
           ),
           ElevatedButton(
@@ -76,21 +81,30 @@ class _ActiveBillPageState extends State<ActiveBillPage> {
               backgroundColor: Colors.black,
               foregroundColor: Colors.white,
             ),
-            onPressed: () => Navigator.pop(context, nameController.text),
+            onPressed: () => Navigator.pop(dialogContext, nameController.text),
             child: const Text('Simpan'),
           ),
         ],
       ),
     );
 
+    if (!context.mounted) {
+      return;
+    }
+
     if (newName != null &&
         newName.trim().isNotEmpty &&
         newName.trim() != _customerName) {
-      final success = await BillService.updateCustomerName(
-        widget.bill.id,
+      final success = await IsarService.updateCustomerName(
+        widget.bill.uuid,
         newName.trim(),
       );
-      if (success && mounted) {
+
+      if (!context.mounted) {
+        return;
+      }
+
+      if (success) {
         setState(() {
           _customerName = newName.trim();
         });
@@ -104,19 +118,19 @@ class _ActiveBillPageState extends State<ActiveBillPage> {
   Future<void> _deleteEntireBill() async {
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('Hapus Seluruh Nota?'),
         content: Text(
           'Yakin ingin membatalkan nota #${widget.bill.id} atas nama $_customerName?\n\nSeluruh pesanan akan dihapus dan stok akan dikembalikan secara otomatis.',
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
+            onPressed: () => Navigator.pop(dialogContext, false),
             child: const Text('Tidak'),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () => Navigator.pop(context, true),
+            onPressed: () => Navigator.pop(dialogContext, true),
             child: const Text(
               'Ya, Hapus Nota',
               style: TextStyle(color: Colors.white),
@@ -126,15 +140,17 @@ class _ActiveBillPageState extends State<ActiveBillPage> {
       ),
     );
 
-    if (!mounted) {
+    if (!context.mounted) {
       return;
     }
 
     if (confirm == true) {
-      final success = await BillService.deleteBill(widget.bill.id);
-      if (!mounted) {
+      final success = await IsarService.deleteBill(widget.bill.uuid);
+
+      if (!context.mounted) {
         return;
       }
+
       if (success) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -153,7 +169,7 @@ class _ActiveBillPageState extends State<ActiveBillPage> {
   }
 
   Future<void> _handleCancelItem(
-    int itemId,
+    String itemUuid,
     String menuName,
     bool isDelivered,
   ) async {
@@ -163,16 +179,16 @@ class _ActiveBillPageState extends State<ActiveBillPage> {
 
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('Batalkan Pesanan?'),
         content: Text(pesanTeks),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
+            onPressed: () => Navigator.pop(dialogContext, false),
             child: const Text('Tidak'),
           ),
           TextButton(
-            onPressed: () => Navigator.pop(context, true),
+            onPressed: () => Navigator.pop(dialogContext, true),
             child: const Text(
               'Ya, Batalkan',
               style: TextStyle(color: Colors.red),
@@ -182,13 +198,18 @@ class _ActiveBillPageState extends State<ActiveBillPage> {
       ),
     );
 
-    if (!mounted) {
+    if (!context.mounted) {
       return;
     }
 
     if (confirm == true) {
-      final success = await BillService.cancelItem(itemId);
-      if (success && mounted) {
+      final success = await IsarService.cancelItem(itemUuid);
+
+      if (!context.mounted) {
+        return;
+      }
+
+      if (success) {
         _loadItems();
       }
     }
@@ -202,14 +223,16 @@ class _ActiveBillPageState extends State<ActiveBillPage> {
       return;
     }
 
-    Map<int, int> splitSelection = {for (var item in validItems) item.id: 0};
+    Map<String, int> splitSelection = {
+      for (var item in validItems) item.uuid: 0,
+    };
     String tempMethod = _paymentMethod;
 
     await showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) {
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (statefulContext, setDialogState) {
           int totalSelectedQty = splitSelection.values.fold(
             0,
             (sum, val) => sum + val,
@@ -217,7 +240,7 @@ class _ActiveBillPageState extends State<ActiveBillPage> {
           double totalSelectedPrice = 0;
 
           for (var item in validItems) {
-            totalSelectedPrice += (item.price * splitSelection[item.id]!);
+            totalSelectedPrice += (item.price * splitSelection[item.uuid]!);
           }
 
           return AlertDialog(
@@ -235,7 +258,7 @@ class _ActiveBillPageState extends State<ActiveBillPage> {
                       itemCount: validItems.length,
                       itemBuilder: (context, index) {
                         final item = validItems[index];
-                        final selectedQty = splitSelection[item.id]!;
+                        final selectedQty = splitSelection[item.uuid]!;
 
                         return ListTile(
                           contentPadding: EdgeInsets.zero,
@@ -260,7 +283,7 @@ class _ActiveBillPageState extends State<ActiveBillPage> {
                                 ),
                                 onPressed: selectedQty > 0
                                     ? () => setDialogState(
-                                        () => splitSelection[item.id] =
+                                        () => splitSelection[item.uuid] =
                                             selectedQty - 1,
                                       )
                                     : null,
@@ -279,7 +302,7 @@ class _ActiveBillPageState extends State<ActiveBillPage> {
                                 ),
                                 onPressed: selectedQty < item.qty
                                     ? () => setDialogState(
-                                        () => splitSelection[item.id] =
+                                        () => splitSelection[item.uuid] =
                                             selectedQty + 1,
                                       )
                                     : null,
@@ -323,7 +346,7 @@ class _ActiveBillPageState extends State<ActiveBillPage> {
             ),
             actions: [
               TextButton(
-                onPressed: () => Navigator.pop(context),
+                onPressed: () => Navigator.pop(statefulContext),
                 child: const Text('Batal'),
               ),
               ElevatedButton(
@@ -333,16 +356,18 @@ class _ActiveBillPageState extends State<ActiveBillPage> {
                 ),
                 onPressed: totalSelectedQty > 0
                     ? () async {
-                        final success = await BillService.payPartialItems(
-                          widget.bill.id,
+                        final success = await IsarService.payPartialItems(
+                          widget.bill.uuid,
                           splitSelection,
                           tempMethod,
                         );
-                        if (!context.mounted) {
+
+                        if (!statefulContext.mounted || !context.mounted) {
                           return;
                         }
+
                         if (success) {
-                          Navigator.pop(context);
+                          Navigator.pop(statefulContext);
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
                               content: Text(
@@ -365,30 +390,32 @@ class _ActiveBillPageState extends State<ActiveBillPage> {
 
   Future<void> _handleCheckout() async {
     if (_paymentMethod == 'QRIS') {
-      final success = await BillService.checkoutBill(widget.bill.id, 'QRIS');
-      if (!mounted) {
+      final success = await IsarService.checkoutBill(widget.bill.uuid, 'QRIS');
+
+      if (!context.mounted) {
         return;
       }
+
       if (success) {
-        Map<int, int> remainingItems = {
+        Map<String, int> remainingItems = {
           for (var item in _items.where((i) => !i.isCancelled && !i.isPaid))
-            item.id: item.qty,
+            item.uuid: item.qty,
         };
-        await BillService.payPartialItems(
-          widget.bill.id,
+        await IsarService.payPartialItems(
+          widget.bill.uuid,
           remainingItems,
           'QRIS',
         );
 
-        if (mounted) {
-          _showSuccessPrintDialog(sisaTagihan, sisaTagihan, 0);
+        if (!context.mounted) {
+          return;
         }
+
+        _showSuccessPrintDialog(sisaTagihan, sisaTagihan, 0);
       } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Gagal memproses pembayaran.')),
-          );
-        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Gagal memproses pembayaran.')),
+        );
       }
       return;
     }
@@ -399,7 +426,7 @@ class _ActiveBillPageState extends State<ActiveBillPage> {
     await showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('Pelunasan Sisa Nota (Tunai)'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -423,7 +450,7 @@ class _ActiveBillPageState extends State<ActiveBillPage> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text('Batal'),
           ),
           ElevatedButton(
@@ -434,38 +461,47 @@ class _ActiveBillPageState extends State<ActiveBillPage> {
             onPressed: () async {
               final cashAmount = double.tryParse(cashController.text) ?? 0;
               if (cashAmount < sisaTagihan) {
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Uang kurang dari tagihan!')),
-                  );
+                if (!context.mounted) {
+                  return;
                 }
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Uang kurang dari tagihan!')),
+                );
                 return;
               }
-              final success = await BillService.checkoutBill(
-                widget.bill.id,
+
+              final success = await IsarService.checkoutBill(
+                widget.bill.uuid,
                 'Cash',
               );
+
               if (!context.mounted) {
                 return;
               }
+
               if (success) {
-                Map<int, int> remainingItems = {
+                Map<String, int> remainingItems = {
                   for (var item in _items.where(
                     (i) => !i.isCancelled && !i.isPaid,
                   ))
-                    item.id: item.qty,
+                    item.uuid: item.qty,
                 };
-                await BillService.payPartialItems(
-                  widget.bill.id,
+                await IsarService.payPartialItems(
+                  widget.bill.uuid,
                   remainingItems,
                   'Cash',
                 );
 
-                if (context.mounted) {
-                  Navigator.pop(context);
-                  final kembalian = cashAmount - sisaTagihan;
-                  _showSuccessPrintDialog(sisaTagihan, cashAmount, kembalian);
+                if (!context.mounted || !dialogContext.mounted) {
+                  return;
                 }
+
+                Navigator.pop(dialogContext);
+                _showSuccessPrintDialog(
+                  sisaTagihan,
+                  cashAmount,
+                  cashAmount - sisaTagihan,
+                );
               }
             },
             child: const Text('LUNASKAN SEMUA'),
@@ -479,7 +515,7 @@ class _ActiveBillPageState extends State<ActiveBillPage> {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         title: const Column(
           children: [
@@ -506,7 +542,7 @@ class _ActiveBillPageState extends State<ActiveBillPage> {
         actions: [
           TextButton(
             onPressed: () {
-              Navigator.pop(context);
+              Navigator.pop(dialogContext);
               Navigator.pop(context, true);
             },
             child: const Text(
@@ -519,15 +555,13 @@ class _ActiveBillPageState extends State<ActiveBillPage> {
               backgroundColor: Colors.blue,
               foregroundColor: Colors.white,
             ),
-            onPressed: () {
-              PrintService.printReceipt(
-                bill: widget.bill,
-                items: _items,
-                totalAmount: total,
-                cashAmount: cash,
-                changeAmount: change,
-              );
-            },
+            onPressed: () => PrintService.printReceipt(
+              bill: widget.bill,
+              items: _items,
+              totalAmount: total,
+              cashAmount: cash,
+              changeAmount: change,
+            ),
             icon: const Icon(Icons.print),
             label: const Text('Cetak Struk'),
           ),
@@ -552,12 +586,11 @@ class _ActiveBillPageState extends State<ActiveBillPage> {
   Widget build(BuildContext context) {
     final billProvider = Provider.of<BillProvider>(context);
     final bool canInteract = _items.isNotEmpty && billProvider.items.isEmpty;
-    final bool isClosedOrPaid =
-        widget.bill.status == 'closed' || widget.bill.status == 'paid';
+    final bool isClosed =
+        widget.bill.status == 'closed'; // <-- HANYA cek diarsipkan atau belum
 
     return PopScope(
       canPop: false,
-      // PERUBAHAN: onPopInvoked diganti menjadi onPopInvokedWithResult
       onPopInvokedWithResult: (bool didPop, dynamic result) {
         if (didPop) {
           return;
@@ -571,7 +604,7 @@ class _ActiveBillPageState extends State<ActiveBillPage> {
             onPressed: () => Navigator.pop(context, true),
           ),
           title: InkWell(
-            onTap: widget.bill.status != 'closed' ? _editCustomerName : null,
+            onTap: !isClosed ? _editCustomerName : null,
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -581,7 +614,7 @@ class _ActiveBillPageState extends State<ActiveBillPage> {
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                if (widget.bill.status != 'closed') ...[
+                if (!isClosed) ...[
                   const SizedBox(width: 8),
                   const Icon(Icons.edit, size: 18, color: Colors.blue),
                 ],
@@ -590,10 +623,10 @@ class _ActiveBillPageState extends State<ActiveBillPage> {
           ),
           centerTitle: true,
           actions: [
-            if (widget.bill.status != 'closed')
+            if (!isClosed)
               IconButton(
                 icon: const Icon(Icons.delete_forever, color: Colors.red),
-                tooltip: 'Hapus Nota & Kembalikan Stok',
+                tooltip: 'Hapus Nota',
                 onPressed: _deleteEntireBill,
               ),
           ],
@@ -609,7 +642,6 @@ class _ActiveBillPageState extends State<ActiveBillPage> {
                         children: [
                           ..._items.map((item) {
                             final isSelesaiBayar = item.isPaid;
-
                             final textStyle = TextStyle(
                               fontSize: 16,
                               decoration: item.isCancelled
@@ -623,6 +655,21 @@ class _ActiveBillPageState extends State<ActiveBillPage> {
                             );
 
                             return ListTile(
+                              onTap: isClosed || item.isCancelled
+                                  ? null
+                                  : () async {
+                                      final success =
+                                          await IsarService.toggleItemDelivered(
+                                            item.uuid,
+                                            item.isDelivered,
+                                          );
+                                      if (!context.mounted) {
+                                        return;
+                                      }
+                                      if (success) {
+                                        _loadItems();
+                                      }
+                                    },
                               contentPadding: const EdgeInsets.symmetric(
                                 vertical: 4,
                               ),
@@ -682,9 +729,10 @@ class _ActiveBillPageState extends State<ActiveBillPage> {
                                     'Rp ${item.totalPrice.toInt()}',
                                     style: textStyle,
                                   ),
+                                  // Selama nota belum ditutup dan item belum lunas, bisa dicancel.
                                   if (!item.isCancelled &&
                                       !isSelesaiBayar &&
-                                      !isClosedOrPaid) ...[
+                                      !isClosed) ...[
                                     const SizedBox(width: 8),
                                     IconButton(
                                       icon: const Icon(
@@ -692,7 +740,7 @@ class _ActiveBillPageState extends State<ActiveBillPage> {
                                         color: Colors.red,
                                       ),
                                       onPressed: () => _handleCancelItem(
-                                        item.id,
+                                        item.uuid,
                                         item.menuName,
                                         item.isDelivered,
                                       ),
@@ -703,8 +751,7 @@ class _ActiveBillPageState extends State<ActiveBillPage> {
                             );
                           }),
 
-                          if (billProvider.items.isNotEmpty &&
-                              !isClosedOrPaid) ...[
+                          if (billProvider.items.isNotEmpty && !isClosed) ...[
                             const SizedBox(height: 16),
                             Container(
                               padding: const EdgeInsets.all(12),
@@ -783,13 +830,15 @@ class _ActiveBillPageState extends State<ActiveBillPage> {
                                         child: ElevatedButton(
                                           onPressed: () async {
                                             final success =
-                                                await BillService.addItemsToBill(
-                                                  widget.bill.id,
+                                                await IsarService.addItemsToBill(
+                                                  widget.bill.uuid,
                                                   billProvider.items,
                                                 );
+
                                             if (!context.mounted) {
                                               return;
                                             }
+
                                             if (success) {
                                               billProvider.clearBill();
                                               _loadItems();
@@ -826,7 +875,9 @@ class _ActiveBillPageState extends State<ActiveBillPage> {
                     ),
                   ),
 
-                  if (widget.bill.status == 'unpaid')
+                  // ================= BAGIAN BAWAH (BOTTOM BAR) =================
+                  // Tampilkan Bottom Bar normal selama NOTA BELUM DIARSIPKAN
+                  if (!isClosed)
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
@@ -879,74 +930,119 @@ class _ActiveBillPageState extends State<ActiveBillPage> {
                           ),
                           const SizedBox(height: 16),
 
-                          SegmentedButton<String>(
-                            segments: const [
-                              ButtonSegment(
-                                value: 'Cash',
-                                label: Text('Tunai (Cash)'),
+                          // Jika masih ada sisa tagihan, tampilkan tombol bayar
+                          if (sisaTagihan > 0) ...[
+                            SegmentedButton<String>(
+                              segments: const [
+                                ButtonSegment(
+                                  value: 'Cash',
+                                  label: Text('Tunai (Cash)'),
+                                ),
+                                ButtonSegment(
+                                  value: 'QRIS',
+                                  label: Text('QRIS'),
+                                ),
+                              ],
+                              selected: {_paymentMethod},
+                              onSelectionChanged: (set) =>
+                                  setState(() => _paymentMethod = set.first),
+                            ),
+                            const SizedBox(height: 16),
+                            Row(
+                              children: [
+                                Expanded(
+                                  flex: 1,
+                                  child: SizedBox(
+                                    height: 50,
+                                    child: OutlinedButton.icon(
+                                      style: OutlinedButton.styleFrom(
+                                        side: BorderSide(
+                                          color: canInteract
+                                              ? Colors.blue
+                                              : Colors.grey,
+                                          width: 2,
+                                        ),
+                                        foregroundColor: Colors.blue,
+                                      ),
+                                      onPressed: canInteract
+                                          ? _showPartialPaymentDialog
+                                          : null,
+                                      icon: const Icon(Icons.pie_chart),
+                                      label: const Text(
+                                        'Sebagian',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  flex: 2,
+                                  child: SizedBox(
+                                    height: 50,
+                                    child: ElevatedButton(
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: Colors.green,
+                                        foregroundColor: Colors.white,
+                                      ),
+                                      onPressed: canInteract
+                                          ? _handleCheckout
+                                          : null,
+                                      child: const Text(
+                                        'LUNASI SEMUA SISA',
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ]
+                          // Jika sudah lunas (0) tapi belum diarsipkan
+                          else ...[
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              decoration: BoxDecoration(
+                                color: Colors.green.shade100,
+                                borderRadius: BorderRadius.circular(8),
                               ),
-                              ButtonSegment(value: 'QRIS', label: Text('QRIS')),
-                            ],
-                            selected: {_paymentMethod},
-                            onSelectionChanged: (set) =>
-                                setState(() => _paymentMethod = set.first),
-                          ),
-                          const SizedBox(height: 16),
+                              child: const Text(
+                                '✅ TAGIHAN LUNAS\n(Klik ikon item di atas jika pesanan sudah diantar atau klik + untuk tambah pesanan baru)',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: Colors.green,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            SizedBox(
+                              width: double.infinity,
+                              height: 45,
+                              child: ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.blue,
+                                  foregroundColor: Colors.white,
+                                ),
+                                onPressed: () => PrintService.printReceipt(
+                                  bill: widget.bill,
+                                  items: _items,
+                                  totalAmount: totalKeseluruhan,
+                                  cashAmount: totalKeseluruhan,
+                                  changeAmount: 0,
+                                ),
+                                icon: const Icon(Icons.print),
+                                label: const Text('Cetak Struk'),
+                              ),
+                            ),
+                          ],
 
-                          Row(
-                            children: [
-                              Expanded(
-                                flex: 1,
-                                child: SizedBox(
-                                  height: 50,
-                                  child: OutlinedButton.icon(
-                                    style: OutlinedButton.styleFrom(
-                                      side: BorderSide(
-                                        color: canInteract && sisaTagihan > 0
-                                            ? Colors.blue
-                                            : Colors.grey,
-                                        width: 2,
-                                      ),
-                                      foregroundColor: Colors.blue,
-                                    ),
-                                    onPressed: canInteract && sisaTagihan > 0
-                                        ? _showPartialPaymentDialog
-                                        : null,
-                                    icon: const Icon(Icons.pie_chart),
-                                    label: const Text(
-                                      'Sebagian',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                flex: 2,
-                                child: SizedBox(
-                                  height: 50,
-                                  child: ElevatedButton(
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors.green,
-                                      foregroundColor: Colors.white,
-                                    ),
-                                    onPressed: canInteract && sisaTagihan > 0
-                                        ? _handleCheckout
-                                        : null,
-                                    child: const Text(
-                                      'LUNASI SEMUA SISA',
-                                      style: TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
                           const SizedBox(height: 12),
                           SizedBox(
                             width: double.infinity,
@@ -968,23 +1064,18 @@ class _ActiveBillPageState extends State<ActiveBillPage> {
                       ),
                     )
                   else
+                    // Tampilan jika nota SUDAH DIARSIPKAN (CLOSED)
                     Container(
                       width: double.infinity,
                       padding: const EdgeInsets.all(16),
-                      color: widget.bill.status == 'closed'
-                          ? Colors.blueGrey.shade100
-                          : Colors.green.shade100,
+                      color: Colors.blueGrey.shade100,
                       child: Column(
                         children: [
-                          Text(
-                            widget.bill.status == 'closed'
-                                ? 'NOTA SUDAH DIARSIPKAN (CLOSED)'
-                                : 'NOTA SUDAH LUNAS\nMenunggu pelanggan pulang untuk diarsipkan.',
+                          const Text(
+                            'NOTA SUDAH DIARSIPKAN (CLOSED)',
                             textAlign: TextAlign.center,
                             style: TextStyle(
-                              color: widget.bill.status == 'closed'
-                                  ? Colors.black87
-                                  : Colors.green,
+                              color: Colors.black87,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
@@ -994,15 +1085,13 @@ class _ActiveBillPageState extends State<ActiveBillPage> {
                               backgroundColor: Colors.blue,
                               foregroundColor: Colors.white,
                             ),
-                            onPressed: () {
-                              PrintService.printReceipt(
-                                bill: widget.bill,
-                                items: _items,
-                                totalAmount: totalKeseluruhan,
-                                cashAmount: totalKeseluruhan,
-                                changeAmount: 0,
-                              );
-                            },
+                            onPressed: () => PrintService.printReceipt(
+                              bill: widget.bill,
+                              items: _items,
+                              totalAmount: totalKeseluruhan,
+                              cashAmount: totalKeseluruhan,
+                              changeAmount: 0,
+                            ),
                             icon: const Icon(Icons.print),
                             label: const Text('Cetak Ulang Struk'),
                           ),
@@ -1011,16 +1100,15 @@ class _ActiveBillPageState extends State<ActiveBillPage> {
                     ),
                 ],
               ),
-        floatingActionButton: widget.bill.status != 'closed'
+        // Tombol + (Tambah) sekarang AKAN SELALU MUNCUL selama nota belum diarsipkan
+        floatingActionButton: !isClosed
             ? FloatingActionButton(
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const MenuChoicePage(),
-                    ),
-                  );
-                },
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const MenuChoicePage(),
+                  ),
+                ),
                 backgroundColor: Colors.black,
                 child: const Icon(Icons.add_shopping_cart, color: Colors.white),
               )

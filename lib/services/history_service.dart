@@ -1,34 +1,54 @@
 import 'package:flutter/foundation.dart';
+import 'package:isar/isar.dart';
 
-import '../database/db_connection.dart';
+import '../database/isar_helper.dart';
+import '../collections/local_bill.dart';
+import '../collections/local_bill_item.dart';
 import '../models/history_bill_model.dart';
 
 class HistoryService {
+  static final Isar _isar = IsarHelper.isar;
+
   static Future<List<HistoryBill>> fetchTodayHistory() async {
     try {
-      final results = await DatabaseHelper.connection.execute(r"""
-        SELECT b.id, b.customer_name, b.created_at, b.payment_method, 
-               COALESCE(SUM(bi.qty * bi.price), 0) as grand_total
-        FROM bills b
-        LEFT JOIN bill_items bi ON b.id = bi.bill_id AND bi.is_cancelled = FALSE
-        WHERE b.status = 'closed' 
-        GROUP BY b.id, b.customer_name, b.created_at, b.payment_method
-        ORDER BY b.created_at DESC
-        """);
+      // 1. Ambil semua nota yang sudah diarsipkan
+      final closedBills = await _isar.localBills
+          .filter()
+          .statusEqualTo('closed')
+          .sortByCreatedAtDesc()
+          .findAll();
 
-      return results
-          .map(
-            (row) => HistoryBill(
-              id: row[0] as int,
-              customerName: row[1] as String? ?? 'Guest',
-              createdAt: row[2] as DateTime,
-              paymentMethod: row[3] as String? ?? 'Cash',
-              totalAmount: double.parse(row[4].toString()),
-            ),
-          )
-          .toList();
+      List<HistoryBill> historyList = [];
+
+      for (var bill in closedBills) {
+        // 2. Ambil rincian item untuk menghitung grand total
+        final items = await _isar.localBillItems
+            .filter()
+            .billUuidEqualTo(bill.uuid)
+            .and()
+            .isCancelledEqualTo(false)
+            .findAll();
+
+        double grandTotal = 0;
+        for (var item in items) {
+          grandTotal += (item.qty * item.price);
+        }
+
+        historyList.add(
+          HistoryBill(
+            id: bill.id,
+            uuid: bill.uuid, // Pass UUID ke model
+            customerName: bill.customerName,
+            createdAt: bill.createdAt,
+            paymentMethod: bill.paymentMethod ?? 'Cash',
+            totalAmount: grandTotal,
+          ),
+        );
+      }
+
+      return historyList;
     } catch (e) {
-      debugPrint("Gagal mengambil riwayat: $e");
+      debugPrint("Gagal mengambil riwayat dari Isar: $e");
       return [];
     }
   }

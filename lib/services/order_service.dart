@@ -1,50 +1,78 @@
 import 'package:flutter/foundation.dart';
-import 'package:postgres/postgres.dart';
+import 'package:isar/isar.dart';
 
-import '../database/db_connection.dart';
+import '../database/isar_helper.dart';
+import '../collections/local_bill.dart';
+import '../collections/local_bill_item.dart';
 import '../models/pending_order_model.dart';
+import 'menu_service.dart'; // <-- IMPORT MENU SERVICE UNTUK KATEGORI ASLI
 
 class OrderService {
+  static final Isar _isar = IsarHelper.isar;
+
   static Future<List<PendingOrder>> fetchPendingOrders() async {
     try {
-      final results = await DatabaseHelper.connection.execute(r"""
-        SELECT bi.id, b.id, b.customer_name, bi.menu_name, bi.qty, bi.notes, b.created_at, m.category
-        FROM bill_items bi
-        JOIN bills b ON bi.bill_id = b.id
-        JOIN menu_items m ON bi.menu_item_id = m.id
-        WHERE bi.is_delivered = FALSE AND bi.is_cancelled = FALSE
-        ORDER BY b.created_at ASC
-        """);
+      final items = await _isar.localBillItems
+          .filter()
+          .isDeliveredEqualTo(false)
+          .and()
+          .isCancelledEqualTo(false)
+          .findAll();
 
-      return results
-          .map(
-            (row) => PendingOrder(
-              itemId: row[0] as int,
-              billId: row[1] as int,
-              customerName: row[2] as String? ?? 'Guest',
-              menuName: row[3] as String,
-              qty: row[4] as int,
-              notes: row[5] as String? ?? '',
-              createdAt: row[6] as DateTime,
-              category: row[7] as String? ?? 'Makanan',
+      // AMBIL KATEGORI ASLI DARI MASTER MENU (PostgreSQL)
+      final menus = await MenuService.fetchMenus();
+      final categoryMap = {for (var m in menus) m.id: m.category};
+
+      List<PendingOrder> result = [];
+      for (var item in items) {
+        final bill = await _isar.localBills
+            .filter()
+            .uuidEqualTo(item.billUuid)
+            .findFirst();
+
+        if (bill != null && bill.status != 'closed') {
+          // Cocokkan id menu dengan kategori aslinya (default ke Makanan jika tidak ketemu)
+          String realCategory = categoryMap[item.menuItemId] ?? 'Makanan';
+
+          result.add(
+            PendingOrder(
+              itemUuid: item.uuid,
+              billUuid: bill.uuid,
+              billId: bill.id,
+              customerName: bill.customerName,
+              menuName: item.menuName,
+              qty: item.qty,
+              notes: item.notes,
+              createdAt: bill.createdAt,
+              category: realCategory, // Kategori kembali akurat 100%
             ),
-          )
-          .toList();
+          );
+        }
+      }
+
+      result.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+      return result;
     } catch (e) {
-      debugPrint("Gagal mengambil antrean: $e");
+      debugPrint("Gagal mengambil antrean Isar: $e");
       return [];
     }
   }
 
-  static Future<bool> markAsDelivered(int itemId) async {
+  static Future<bool> markAsDelivered(String itemUuid) async {
     try {
-      await DatabaseHelper.connection.execute(
-        Sql.named('UPDATE bill_items SET is_delivered = TRUE WHERE id = @id'),
-        parameters: {'id': itemId},
-      );
-      return true;
+      final item = await _isar.localBillItems
+          .filter()
+          .uuidEqualTo(itemUuid)
+          .findFirst();
+      if (item != null) {
+        item.isDelivered = true;
+        item.isSynced = false;
+        await _isar.writeTxn(() async => await _isar.localBillItems.put(item));
+        return true;
+      }
+      return false;
     } catch (e) {
-      debugPrint("Gagal update status: $e");
+      debugPrint("Gagal update status di Isar: $e");
       return false;
     }
   }

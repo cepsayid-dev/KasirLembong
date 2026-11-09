@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/bill_provider.dart';
-import '../services/bill_service.dart';
 import '../models/bill_model.dart';
+import '../services/isar_service.dart'; // <-- TAMBAHKAN IMPORT ISAR
 import 'menu_choice_page.dart';
 import 'active_bill_page.dart';
 
@@ -240,7 +240,6 @@ class BillPage extends StatelessWidget {
         ),
       ),
 
-      // PANEL BAWAH BERISI 2 TOMBOL AKSI
       bottomNavigationBar: Container(
         padding: const EdgeInsets.all(16),
         decoration: const BoxDecoration(
@@ -281,7 +280,7 @@ class BillPage extends StatelessWidget {
               const SizedBox(height: 12),
               Row(
                 children: [
-                  // TOMBOL 1: SIMPAN (TAPI BELUM BAYAR)
+                  // TOMBOL 1: SIMPAN AJA (MENGGUNAKAN ISAR)
                   Expanded(
                     flex: 1,
                     child: SizedBox(
@@ -297,26 +296,35 @@ class BillPage extends StatelessWidget {
                         onPressed: billProvider.items.isEmpty
                             ? null
                             : () async {
-                                final billId = await BillService.saveBill(
-                                  billProvider,
-                                );
-                                if (!context.mounted) return;
+                                try {
+                                  final namaTamu =
+                                      billProvider.customerName.trim().isEmpty
+                                      ? 'Guest'
+                                      : billProvider.customerName.trim();
 
-                                if (billId != null) {
+                                  // Tembak langsung ke IsarService
+                                  await IsarService.createBill(
+                                    customerName: namaTamu,
+                                    items: billProvider.items,
+                                    isPaid: false,
+                                    paymentMethod: 'Cash',
+                                  );
+
+                                  if (!context.mounted) return;
+
                                   billProvider.clearBill();
                                   Navigator.pop(context, true);
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     const SnackBar(
                                       content: Text(
-                                        'Nota disimpan ke antrean (Belum Bayar)',
+                                        'Nota disimpan & masuk antrean dapur!',
                                       ),
                                     ),
                                   );
-                                } else {
+                                } catch (e) {
+                                  if (!context.mounted) return;
                                   ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text('Gagal menyimpan nota'),
-                                    ),
+                                    SnackBar(content: Text(e.toString())),
                                   );
                                 }
                               },
@@ -332,7 +340,7 @@ class BillPage extends StatelessWidget {
                   ),
                   const SizedBox(width: 8),
 
-                  // TOMBOL 2: LANGSUNG BAYAR (LEMPAR KE HALAMAN PEMBAYARAN)
+                  // TOMBOL 2: LANGSUNG BAYAR (MENGGUNAKAN ISAR)
                   Expanded(
                     flex: 2,
                     child: SizedBox(
@@ -345,31 +353,23 @@ class BillPage extends StatelessWidget {
                         onPressed: billProvider.items.isEmpty
                             ? null
                             : () async {
-                                final billId = await BillService.saveBill(
-                                  billProvider,
-                                );
-                                if (!context.mounted) return;
-
-                                if (billId != null) {
-                                  // 1. Simpan nama tamu sebelum keranjang dikosongkan
+                                try {
                                   final namaTamu =
-                                      billProvider.customerName.isEmpty
+                                      billProvider.customerName.trim().isEmpty
                                       ? 'Guest'
-                                      : billProvider.customerName;
+                                      : billProvider.customerName.trim();
 
-                                  // 2. Kosongkan keranjang
-                                  billProvider.clearBill();
-
-                                  // 3. Buat model nota sementara untuk dilempar ke halaman ActiveBillPage
-                                  final newBill = BillModel(
-                                    id: billId,
+                                  // Tembak langsung ke IsarService
+                                  final newBill = await IsarService.createBill(
                                     customerName: namaTamu,
-                                    createdAt: DateTime.now(),
-                                    status: 'unpaid',
-                                    isAllDelivered: false,
+                                    items: billProvider.items,
+                                    isPaid: true,
+                                    paymentMethod: 'Cash',
                                   );
 
-                                  // 4. Tutup halaman keranjang dan ganti dengan halaman pembayaran
+                                  if (!context.mounted) return;
+
+                                  billProvider.clearBill();
                                   Navigator.pushReplacement(
                                     context,
                                     MaterialPageRoute(
@@ -377,11 +377,10 @@ class BillPage extends StatelessWidget {
                                           ActiveBillPage(bill: newBill),
                                     ),
                                   );
-                                } else {
+                                } catch (e) {
+                                  if (!context.mounted) return;
                                   ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text('Gagal menyimpan nota'),
-                                    ),
+                                    SnackBar(content: Text(e.toString())),
                                   );
                                 }
                               },

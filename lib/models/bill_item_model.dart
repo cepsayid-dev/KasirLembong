@@ -1,5 +1,6 @@
 class BillItemModel {
   final int id;
+  final String uuid; // --- TAMBAHAN BARU ---
   final int menuId;
   final String menuName;
   final int qty;
@@ -7,10 +8,11 @@ class BillItemModel {
   final String notes;
   final bool isDelivered;
   final bool isCancelled;
-  final bool isPaid; // VARIABEL BARU
+  final bool isPaid;
 
   BillItemModel({
     required this.id,
+    this.uuid = '', // --- TAMBAHAN BARU ---
     required this.menuId,
     required this.menuName,
     required this.qty,
@@ -18,7 +20,7 @@ class BillItemModel {
     required this.notes,
     required this.isDelivered,
     required this.isCancelled,
-    required this.isPaid, // VARIABEL BARU
+    required this.isPaid,
   });
 
   double get totalPrice => qty * price;

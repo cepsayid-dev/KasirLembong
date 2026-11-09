@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/bill_model.dart';
-import '../services/bill_service.dart';
+import '../services/isar_service.dart'; // MENGGUNAKAN ISAR
 import 'active_bill_page.dart';
 import 'history_page.dart';
 import 'master_menu_page.dart';
@@ -28,7 +28,12 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _loadActiveBills() async {
     setState(() => _isLoading = true);
-    final bills = await BillService.fetchActiveBills();
+
+    // JALANKAN PENGECEKAN AUTO-ARCHIVE TERLEBIH DAHULU
+    await IsarService.checkAndAutoArchiveBills();
+
+    // MENGGUNAKAN ISAR
+    final bills = await IsarService.fetchActiveBills();
     if (!mounted) {
       return;
     }
@@ -123,7 +128,8 @@ class _HomePageState extends State<HomePage> {
                     icon: const Icon(Icons.archive, size: 18),
                     label: const Text('Arsipkan'),
                     onPressed: () async {
-                      final success = await BillService.archiveBill(bill.id);
+                      // MENGGUNAKAN ISAR
+                      final success = await IsarService.archiveBill(bill.id);
                       if (success && context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
@@ -157,12 +163,10 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    // Tab 1: Belum lunas ATAU Sudah Lunas Tapi Masih Dimasak Dapur
     final unpaidBills = _activeBills
         .where((b) => b.status == 'unpaid' || !b.isAllDelivered)
         .toList();
 
-    // Tab 2: Sudah Lunas DAN Semua Makanan Sudah Diantar
     final paidBills = _activeBills
         .where((b) => b.status == 'paid' && b.isAllDelivered)
         .toList();

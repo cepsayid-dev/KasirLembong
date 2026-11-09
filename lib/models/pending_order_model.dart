@@ -1,5 +1,6 @@
 class PendingOrder {
-  final int itemId;
+  final String itemUuid;
+  final String billUuid;
   final int billId;
   final String customerName;
   final String menuName;
@@ -9,7 +10,8 @@ class PendingOrder {
   final String category;
 
   PendingOrder({
-    required this.itemId,
+    required this.itemUuid,
+    required this.billUuid,
     required this.billId,
     required this.customerName,
     required this.menuName,

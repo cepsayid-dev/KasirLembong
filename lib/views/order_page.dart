@@ -21,7 +21,6 @@ class _OrderPageState extends State<OrderPage> {
   void initState() {
     super.initState();
     _loadOrders();
-    // Memperbarui UI setiap 1 menit agar warna waktu (SLA) otomatis berubah
     _timer = Timer.periodic(const Duration(minutes: 1), (timer) {
       if (mounted) setState(() {});
     });
@@ -43,8 +42,8 @@ class _OrderPageState extends State<OrderPage> {
     });
   }
 
-  Future<void> _handleCheck(int itemId, String menuName) async {
-    final success = await OrderService.markAsDelivered(itemId);
+  Future<void> _handleCheck(String itemUuid, String menuName) async {
+    final success = await OrderService.markAsDelivered(itemUuid);
     if (!mounted) return;
     if (success) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -57,20 +56,18 @@ class _OrderPageState extends State<OrderPage> {
     }
   }
 
-  // Menentukan warna SLA berdasarkan selisih waktu
   Color _getSlaColor(DateTime createdAt) {
     final minutes = DateTime.now().difference(createdAt).inMinutes;
-    if (minutes >= 15) return Colors.red.shade100; // Terlambat
-    if (minutes >= 10) return Colors.orange.shade100; // Warning
-    return Colors.green.shade50; // Aman
+    if (minutes >= 15) return Colors.red.shade100;
+    if (minutes >= 10) return Colors.orange.shade100;
+    return Colors.green.shade50;
   }
 
-  // Membuat widget untuk setiap Tab (Makanan atau Minuman)
-  Widget _buildOrderView(String category) {
-    // 1. Filter pesanan berdasarkan kategori
-    final categoryOrders = _allOrders
-        .where((o) => o.category == category)
-        .toList();
+  Widget _buildOrderView(bool isMinumanTab) {
+    final categoryOrders = _allOrders.where((o) {
+      bool isDrink = o.category.toLowerCase().contains('minum');
+      return isMinumanTab ? isDrink : !isDrink;
+    }).toList();
 
     if (categoryOrders.isEmpty) {
       return const Center(
@@ -78,7 +75,6 @@ class _OrderPageState extends State<OrderPage> {
       );
     }
 
-    // 2. Buat Rekap Total (Summary) untuk Batch Cooking
     Map<String, int> summary = {};
     for (var order in categoryOrders) {
       String key = order.notes.isEmpty
@@ -87,15 +83,14 @@ class _OrderPageState extends State<OrderPage> {
       summary[key] = (summary[key] ?? 0) + order.qty;
     }
 
-    // 3. Kelompokkan pesanan berdasarkan ID Nota
-    Map<int, List<PendingOrder>> groupedByBill = {};
+    // Kelompokkan berdasarkan UUID, bukan ID int
+    Map<String, List<PendingOrder>> groupedByBill = {};
     for (var order in categoryOrders) {
-      groupedByBill.putIfAbsent(order.billId, () => []).add(order);
+      groupedByBill.putIfAbsent(order.billUuid, () => []).add(order);
     }
 
     return Column(
       children: [
-        // BAGIAN ATAS: REKAP TOTAL (SUMMARY)
         Container(
           width: double.infinity,
           padding: const EdgeInsets.all(12),
@@ -132,16 +127,15 @@ class _OrderPageState extends State<OrderPage> {
 
         const Divider(height: 1, color: Colors.black),
 
-        // BAGIAN BAWAH: DAFTAR PER NOTA
         Expanded(
           child: ListView.builder(
             padding: const EdgeInsets.all(8),
             itemCount: groupedByBill.length,
             itemBuilder: (context, index) {
-              int billId = groupedByBill.keys.elementAt(index);
-              List<PendingOrder> billItems = groupedByBill[billId]!;
+              String billUuid = groupedByBill.keys.elementAt(index);
+              List<PendingOrder> billItems = groupedByBill[billUuid]!;
 
-              // Gunakan waktu pembuatan dari item pertama di nota tersebut
+              int billId = billItems.first.billId;
               DateTime billTime = billItems.first.createdAt;
               int waitTime = DateTime.now().difference(billTime).inMinutes;
               String customer = billItems.first.customerName == 'Guest'
@@ -157,7 +151,6 @@ class _OrderPageState extends State<OrderPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Header Nota
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
@@ -179,7 +172,6 @@ class _OrderPageState extends State<OrderPage> {
                       ),
                       const Divider(color: Colors.black26),
 
-                      // Rincian Item di dalam Nota ini
                       ...billItems.map(
                         (item) => ListTile(
                           contentPadding: EdgeInsets.zero,
@@ -211,7 +203,7 @@ class _OrderPageState extends State<OrderPage> {
                               size: 30,
                             ),
                             onPressed: () =>
-                                _handleCheck(item.itemId, item.menuName),
+                                _handleCheck(item.itemUuid, item.menuName),
                           ),
                         ),
                       ),
@@ -242,7 +234,7 @@ class _OrderPageState extends State<OrderPage> {
             indicatorColor: Colors.black,
             labelStyle: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
             tabs: [
-              Tab(text: 'MAKANAN'),
+              Tab(text: 'MAKANAN & SNACK'),
               Tab(text: 'MINUMAN'),
             ],
           ),
@@ -250,10 +242,7 @@ class _OrderPageState extends State<OrderPage> {
         body: _isLoading
             ? const Center(child: CircularProgressIndicator())
             : TabBarView(
-                children: [
-                  _buildOrderView('Makanan'),
-                  _buildOrderView('Minuman'),
-                ],
+                children: [_buildOrderView(false), _buildOrderView(true)],
               ),
       ),
     );

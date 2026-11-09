@@ -1,80 +1,62 @@
 import 'package:flutter/foundation.dart';
-import 'package:postgres/postgres.dart';
+import 'package:isar/isar.dart';
 
-import '../database/db_connection.dart';
+import '../database/isar_helper.dart';
+import '../collections/local_expense_note.dart';
+import '../collections/local_expense_item.dart';
+import '../collections/local_menu.dart';
 import '../models/expense_model.dart';
 import '../models/menu_model.dart';
 
 class ExpenseService {
-  // 1. Inisialisasi Tabel Pintar
-  static Future<void> initTables() async {
-    try {
-      // Tabel Kertas Nota Pengeluaran
-      await DatabaseHelper.connection.execute('''
-        CREATE TABLE IF NOT EXISTS expense_notes (
-          id SERIAL PRIMARY KEY,
-          type VARCHAR(50) DEFAULT 'Biasa', 
-          description TEXT NOT NULL,
-          amount NUMERIC DEFAULT 0,
-          status VARCHAR(50) DEFAULT 'Lunas', 
-          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-      ''');
+  static final Isar _isar = IsarHelper.isar;
 
-      // Tabel Isi Belanjaan Restok
-      await DatabaseHelper.connection.execute('''
-        CREATE TABLE IF NOT EXISTS expense_items (
-          id SERIAL PRIMARY KEY,
-          note_id INT NOT NULL,
-          menu_id INT NOT NULL,
-          menu_name VARCHAR(255) NOT NULL,
-          tracking_mode VARCHAR(50) DEFAULT 'numeric',
-          qty INT DEFAULT 0,
-          price NUMERIC DEFAULT 0
-        )
-      ''');
-    } catch (e) {
-      debugPrint("Gagal membuat tabel pengeluaran: $e");
-    }
-  }
+  // 1. Init tables dibiarkan kosong agar tidak error jika terlanjur dipanggil di UI lama
+  static Future<void> initTables() async {}
 
   // 2. Mengambil Semua Nota Pengeluaran
   static Future<List<ExpenseNote>> fetchExpenseNotes() async {
     try {
-      await initTables();
-      final results = await DatabaseHelper.connection.execute(
-        "SELECT id, type, description, amount, status, created_at FROM expense_notes ORDER BY created_at DESC",
-      );
+      final results = await _isar.localExpenseNotes
+          .where()
+          .sortByCreatedAtDesc()
+          .findAll();
 
       return results
           .map(
             (row) => ExpenseNote(
-              id: row[0] as int,
-              type: row[1] as String,
-              description: row[2] as String,
-              amount: double.parse(row[3].toString()),
-              status: row[4] as String,
-              createdAt: row[5] as DateTime,
+              id: row.id,
+              type: row.type,
+              description: row.description,
+              amount: row.amount,
+              status: row.status,
+              createdAt: row.createdAt,
             ),
           )
           .toList();
     } catch (e) {
+      debugPrint("Error Isar Expense: $e");
       return [];
     }
   }
 
-  // 3. Tambah Pengeluaran Biasa (Satu-satu seperti Beli Gas/Parkir)
+  // 3. Tambah Pengeluaran Biasa (Cth: Beli Gas/Parkir)
   static Future<bool> addGeneralExpense(
     String description,
     double amount,
   ) async {
     try {
-      await DatabaseHelper.connection.execute(
-        Sql.named(
-          "INSERT INTO expense_notes (type, description, amount, status) VALUES ('Biasa', @desc, @amount, 'Lunas')",
-        ),
-        parameters: {'desc': description, 'amount': amount},
-      );
+      final note = LocalExpenseNote()
+        ..type = 'Biasa'
+        ..description = description
+        ..amount = amount
+        ..status = 'Lunas'
+        ..createdAt = DateTime.now()
+        ..isSynced = false;
+
+      await _isar.writeTxn(() async {
+        await _isar.localExpenseNotes.put(note);
+      });
       return true;
     } catch (e) {
       return false;
@@ -84,41 +66,48 @@ class ExpenseService {
   // 4. BUAT DRAFT LIST BELANJA (PO)
   static Future<bool> createDraftRestock(List<MenuModel> selectedMenus) async {
     try {
-      // Buat Notanya dulu
-      final result = await DatabaseHelper.connection.execute(
-        "INSERT INTO expense_notes (type, description, amount, status) VALUES ('Restok', 'Draft Belanja Restok', 0, 'Draft') RETURNING id",
-      );
-      final noteId = result.first[0] as int;
+      final note = LocalExpenseNote()
+        ..type = 'Restok'
+        ..description = 'Draft Belanja Restok'
+        ..amount = 0
+        ..status = 'Draft'
+        ..createdAt = DateTime.now()
+        ..isSynced = false;
 
-      // Masukkan list barang yang mau dibeli
-      for (var menu in selectedMenus) {
-        // Cek harga beli terakhir untuk fitur auto-complete!
-        final priceResult = await DatabaseHelper.connection.execute(
-          Sql.named(
-            "SELECT price FROM expense_items WHERE menu_id = @id ORDER BY id DESC LIMIT 1",
-          ),
-          parameters: {'id': menu.id},
-        );
-        double lastPrice = priceResult.isEmpty
-            ? 0
-            : double.parse(priceResult.first[0].toString());
+      await _isar.writeTxn(() async {
+        // Simpan nota untuk mendapatkan ID otomatis dari Isar
+        final noteId = await _isar.localExpenseNotes.put(note);
 
-        await DatabaseHelper.connection.execute(
-          Sql.named(
-            "INSERT INTO expense_items (note_id, menu_id, menu_name, tracking_mode, qty, price) VALUES (@noteId, @menuId, @menuName, @mode, 0, @price)",
-          ),
-          parameters: {
-            'noteId': noteId,
-            'menuId': menu.id,
-            'menuName': menu.name,
-            'mode': menu.trackingMode,
-            'price': lastPrice, // Terisi otomatis dengan harga beli sebelumnya!
-          },
-        );
-      }
+        List<LocalExpenseItem> itemsToSave = [];
+        for (var menu in selectedMenus) {
+          // Cari histori harga beli terakhir untuk fitur auto-complete
+          final historyItems = await _isar.localExpenseItems
+              .filter()
+              .menuIdEqualTo(menu.id)
+              .findAll();
+
+          double lastPrice = 0;
+          if (historyItems.isNotEmpty) {
+            lastPrice = historyItems.last.price;
+          }
+
+          itemsToSave.add(
+            LocalExpenseItem()
+              ..noteId = noteId
+              ..menuId = menu.id
+              ..menuName = menu.name
+              ..trackingMode = menu.trackingMode
+              ..qty = 0
+              ..price = lastPrice
+              ..stockStatus = menu.stockStatus
+              ..isSynced = false,
+          );
+        }
+        await _isar.localExpenseItems.putAll(itemsToSave);
+      });
       return true;
     } catch (e) {
-      debugPrint("Gagal buat draft restok: $e");
+      debugPrint("Gagal buat draft restok Isar: $e");
       return false;
     }
   }
@@ -126,21 +115,21 @@ class ExpenseService {
   // 5. MENGAMBIL RINCIAN BARANG DARI NOTA DRAFT
   static Future<List<RestockItem>> fetchDraftItems(int noteId) async {
     try {
-      final results = await DatabaseHelper.connection.execute(
-        Sql.named(
-          "SELECT id, menu_id, menu_name, tracking_mode, qty, price FROM expense_items WHERE note_id = @id",
-        ),
-        parameters: {'id': noteId},
-      );
+      final results = await _isar.localExpenseItems
+          .filter()
+          .noteIdEqualTo(noteId)
+          .findAll();
+
       return results
           .map(
             (row) => RestockItem(
-              id: row[0] as int,
-              menuId: row[1] as int,
-              menuName: row[2] as String,
-              trackingMode: row[3] as String,
-              qty: row[4] as int,
-              price: double.parse(row[5].toString()),
+              id: row.id,
+              menuId: row.menuId,
+              menuName: row.menuName,
+              trackingMode: row.trackingMode,
+              qty: row.qty,
+              price: row.price,
+              stockStatus: row.stockStatus ?? 'in_stock',
             ),
           )
           .toList();
@@ -149,7 +138,7 @@ class ExpenseService {
     }
   }
 
-  // 6. KONFIRMASI BARANG DATANG (UPDATE STOK & LUNASKAN NOTA)
+  // 6. KONFIRMASI BARANG DATANG (UPDATE STOK LOKAL & LUNASKAN NOTA)
   static Future<bool> confirmRestock(
     int noteId,
     List<RestockItem> items,
@@ -157,49 +146,48 @@ class ExpenseService {
     try {
       double totalAmount = 0;
 
-      for (var item in items) {
-        totalAmount += item.price; // Hitung total seluruh belanja
+      await _isar.writeTxn(() async {
+        for (var item in items) {
+          totalAmount += item.price;
 
-        // A. Update rincian harga aktual di nota
-        await DatabaseHelper.connection.execute(
-          Sql.named(
-            "UPDATE expense_items SET qty = @qty, price = @price WHERE id = @id",
-          ),
-          parameters: {'id': item.id, 'qty': item.qty, 'price': item.price},
-        );
+          // A. Update rincian item belanja
+          if (item.id != null) {
+            final localItem = await _isar.localExpenseItems.get(item.id!);
+            if (localItem != null) {
+              localItem.qty = item.qty;
+              localItem.price = item.price;
+              localItem.isSynced = false;
+              await _isar.localExpenseItems.put(localItem);
+            }
+          }
 
-        // B. UPDATE STOK MASTER MENU OTOMATIS
-        if (item.trackingMode == 'numeric') {
-          await DatabaseHelper.connection.execute(
-            Sql.named(
-              "UPDATE menu_items SET stock_qty = stock_qty + @qty WHERE id = @id",
-            ),
-            parameters: {'id': item.menuId, 'qty': item.qty},
-          );
-        } else {
-          await DatabaseHelper.connection.execute(
-            Sql.named(
-              "UPDATE menu_items SET stock_status = @status WHERE id = @id",
-            ),
-            parameters: {
-              'id': item.menuId,
-              'status': item.stockStatus,
-            }, // Update teks jadi 'Tersedia' dsb
-          );
+          // B. UPDATE STOK MASTER MENU LOKAL OTOMATIS
+          final menu = await _isar.localMenus.get(item.menuId);
+          if (menu != null) {
+            if (item.trackingMode == 'numeric') {
+              menu.stockQty += item.qty;
+            } else {
+              menu.stockStatus = item.stockStatus;
+            }
+            menu.isSynced = false;
+            await _isar.localMenus.put(menu);
+          }
         }
-      }
 
-      // C. Tutup nota menjadi Lunas dan set nominal pengeluaran aslinya
-      await DatabaseHelper.connection.execute(
-        Sql.named(
-          "UPDATE expense_notes SET status = 'Lunas', amount = @amount, description = 'Restok Selesai' WHERE id = @id",
-        ),
-        parameters: {'id': noteId, 'amount': totalAmount},
-      );
+        // C. Tutup nota menjadi Lunas
+        final note = await _isar.localExpenseNotes.get(noteId);
+        if (note != null) {
+          note.status = 'Lunas';
+          note.amount = totalAmount;
+          note.description = 'Restok Selesai';
+          note.isSynced = false;
+          await _isar.localExpenseNotes.put(note);
+        }
+      });
 
       return true;
     } catch (e) {
-      debugPrint("Gagal konfirmasi restok: $e");
+      debugPrint("Gagal konfirmasi restok Isar: $e");
       return false;
     }
   }
@@ -207,14 +195,10 @@ class ExpenseService {
   // 7. Hapus Nota
   static Future<bool> deleteNote(int id) async {
     try {
-      await DatabaseHelper.connection.execute(
-        Sql.named("DELETE FROM expense_items WHERE note_id = @id"),
-        parameters: {'id': id},
-      );
-      await DatabaseHelper.connection.execute(
-        Sql.named("DELETE FROM expense_notes WHERE id = @id"),
-        parameters: {'id': id},
-      );
+      await _isar.writeTxn(() async {
+        await _isar.localExpenseItems.filter().noteIdEqualTo(id).deleteAll();
+        await _isar.localExpenseNotes.delete(id);
+      });
       return true;
     } catch (e) {
       return false;
