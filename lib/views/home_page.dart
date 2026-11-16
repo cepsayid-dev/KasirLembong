@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 
 import '../models/bill_model.dart';
 import '../services/isar_service.dart';
-import '../services/sync_service.dart'; // <-- IMPORT SYNC SERVICE
+import '../services/sync_service.dart';
 import 'active_bill_page.dart';
 import 'history_page.dart';
 import 'master_menu_page.dart';
@@ -21,10 +24,79 @@ class _HomePageState extends State<HomePage> {
   List<BillModel> _activeBills = [];
   bool _isLoading = true;
 
+  StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
+  bool _isAutoSyncing = false;
+
   @override
   void initState() {
     super.initState();
     _loadActiveBills();
+    _setupAutoSync();
+    // Cek langsung saat aplikasi baru dibuka (barangkali ada sisa data offline)
+    _triggerSilentSync(delaySeconds: 2);
+  }
+
+  @override
+  void dispose() {
+    _connectivitySubscription?.cancel();
+    super.dispose();
+  }
+
+  // --- FUNGSI INTI AUTO-SYNC ANTI-SPAM ---
+  Future<void> _triggerSilentSync({int delaySeconds = 4}) async {
+    if (_isAutoSyncing) return;
+
+    // 1. Cek apakah ada data baru yang belum di-sync
+    final needsSync = await SyncService.hasUnsyncedData();
+    if (!needsSync) {
+      debugPrint("AutoSync: Tidak ada data baru, skip.");
+      return;
+    }
+
+    // 2. Cek status koneksi saat ini
+    final connectivityResult = await Connectivity().checkConnectivity();
+    final hasConnection = connectivityResult.any(
+      (r) => r != ConnectivityResult.none,
+    );
+    if (!hasConnection) {
+      debugPrint("AutoSync: Masih offline, menunggu koneksi...");
+      return;
+    }
+
+    _isAutoSyncing = true;
+    debugPrint(
+      "AutoSync: Menunggu $delaySeconds detik agar jaringan stabil...",
+    );
+    await Future.delayed(Duration(seconds: delaySeconds));
+
+    final success = await SyncService.syncAllToServer();
+    _isAutoSyncing = false;
+
+    if (success && mounted) {
+      debugPrint("AutoSync: BERHASIL!");
+      ScaffoldMessenger.of(context).clearSnackBars();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('☁️ Data offline otomatis tersinkron ke server!'),
+          backgroundColor: Colors.green,
+          duration: Duration(seconds: 3),
+        ),
+      );
+    } else {
+      debugPrint("AutoSync: Gagal terhubung ke server (Silent Fail).");
+    }
+  }
+
+  void _setupAutoSync() {
+    _connectivitySubscription = Connectivity().onConnectivityChanged.listen((
+      results,
+    ) async {
+      final hasConnection = results.any((r) => r != ConnectivityResult.none);
+      if (hasConnection) {
+        debugPrint("AutoSync: Perubahan jaringan terdeteksi -> Online");
+        await _triggerSilentSync(delaySeconds: 4);
+      }
+    });
   }
 
   Future<void> _loadActiveBills() async {
@@ -136,6 +208,7 @@ class _HomePageState extends State<HomePage> {
                           ),
                         );
                         _loadActiveBills();
+                        _triggerSilentSync(delaySeconds: 1);
                       }
                     },
                   )
@@ -149,6 +222,7 @@ class _HomePageState extends State<HomePage> {
               );
               if (result == true && mounted) {
                 _loadActiveBills();
+                _triggerSilentSync(delaySeconds: 1);
               }
             },
           ),
@@ -177,10 +251,9 @@ class _HomePageState extends State<HomePage> {
           ),
           centerTitle: true,
           actions: [
-            // TOMBOL SYNC KE SERVER
             IconButton(
               icon: const Icon(Icons.cloud_upload, color: Colors.blue),
-              tooltip: 'Sync ke Server',
+              tooltip: 'Sync Manual ke Server',
               onPressed: () async {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
@@ -191,6 +264,7 @@ class _HomePageState extends State<HomePage> {
                 final success = await SyncService.syncAllToServer();
 
                 if (mounted) {
+                  ScaffoldMessenger.of(context).clearSnackBars();
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text(
@@ -222,7 +296,10 @@ class _HomePageState extends State<HomePage> {
             ),
             IconButton(
               icon: const Icon(Icons.refresh),
-              onPressed: _loadActiveBills,
+              onPressed: () {
+                _loadActiveBills();
+                _triggerSilentSync(delaySeconds: 1);
+              },
             ),
           ],
           bottom: const TabBar(
@@ -281,14 +358,17 @@ class _HomePageState extends State<HomePage> {
                   'Kas Keluar (Belanja)',
                   style: TextStyle(fontWeight: FontWeight.bold),
                 ),
-                onTap: () {
+                onTap: () async {
                   Navigator.pop(context);
-                  Navigator.push(
+                  await Navigator.push(
                     context,
                     MaterialPageRoute(
                       builder: (context) => const ExpensePage(),
                     ),
                   );
+                  if (mounted) {
+                    _triggerSilentSync(delaySeconds: 1);
+                  }
                 },
               ),
             ],
@@ -309,6 +389,7 @@ class _HomePageState extends State<HomePage> {
             );
             if (result == true && mounted) {
               _loadActiveBills();
+              _triggerSilentSync(delaySeconds: 1);
             }
           },
           child: const Icon(Icons.add, color: Colors.white),

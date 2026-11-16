@@ -17,7 +17,29 @@ class SyncService {
   // GANTI IP INI SESUAI IP LAPTOP MAS
   static const String baseUrl = 'http://192.168.110.115:3000/api';
 
-  // --- FUNGSI UTAMA: SYNC SEMUA DATA (PEMASUKAN & PENGELUARAN) ---
+  // --- CEK APAKAH ADA DATA YANG PERLU DI-SYNC ---
+  static Future<bool> hasUnsyncedData() async {
+    final billsCount = await _isar.localBills
+        .filter()
+        .isSyncedEqualTo(false)
+        .count();
+    final itemsCount = await _isar.localBillItems
+        .filter()
+        .isSyncedEqualTo(false)
+        .count();
+    final notesCount = await _isar.localExpenseNotes
+        .filter()
+        .isSyncedEqualTo(false)
+        .count();
+    final expItemsCount = await _isar.localExpenseItems
+        .filter()
+        .isSyncedEqualTo(false)
+        .count();
+
+    return (billsCount + itemsCount + notesCount + expItemsCount) > 0;
+  }
+
+  // --- FUNGSI UTAMA: SYNC SEMUA DATA ---
   static Future<bool> syncAllToServer() async {
     final billsSuccess = await syncBillsToServer();
     final expensesSuccess = await syncExpensesToServer();
@@ -111,7 +133,6 @@ class SyncService {
         return true;
       }
 
-      // Ambil semua nota untuk referensi pembuatan ID unik pada item
       final allNotes = await _isar.localExpenseNotes.where().findAll();
       final noteTimeMap = {
         for (var n in allNotes) n.id: n.createdAt.millisecondsSinceEpoch,
