@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/menu_model.dart';
 import '../services/menu_service.dart';
 import '../services/expense_service.dart';
+import '../services/sync_service.dart'; // <-- IMPORT SYNC SERVICE
 
 class MasterMenuPage extends StatefulWidget {
   const MasterMenuPage({super.key});
@@ -423,12 +424,44 @@ class _MasterMenuPageState extends State<MasterMenuPage> {
                 _selectedMenusForRestock.clear();
               }),
             )
-          else
+          else ...[
+            // --- TOMBOL TARIK MENU DARI SERVER ---
+            IconButton(
+              icon: const Icon(Icons.cloud_download, color: Colors.blue),
+              tooltip: 'Tarik Menu dari Server',
+              onPressed: () async {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Menarik Master Menu dari server...'),
+                  ),
+                );
+
+                final success = await SyncService.pullMenusFromServer();
+
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        success
+                            ? '✅ Berhasil update menu!'
+                            : '❌ Gagal tarik data dari server.',
+                      ),
+                      backgroundColor: success ? Colors.green : Colors.red,
+                    ),
+                  );
+                  if (success) {
+                    _loadMenus(); // Refresh UI biar menunya langsung muncul
+                  }
+                }
+              },
+            ),
+            // --- TOMBOL BUAT PO RESTOK ---
             IconButton(
               icon: const Icon(Icons.checklist),
               tooltip: 'Buat PO Belanja',
               onPressed: () => setState(() => _isSelectionMode = true),
             ),
+          ],
         ],
       ),
       body: Column(

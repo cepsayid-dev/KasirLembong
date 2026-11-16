@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../models/bill_model.dart';
-import '../services/isar_service.dart'; // MENGGUNAKAN ISAR
+import '../services/isar_service.dart';
+import '../services/sync_service.dart'; // <-- IMPORT SYNC SERVICE
 import 'active_bill_page.dart';
 import 'history_page.dart';
 import 'master_menu_page.dart';
@@ -29,10 +30,8 @@ class _HomePageState extends State<HomePage> {
   Future<void> _loadActiveBills() async {
     setState(() => _isLoading = true);
 
-    // JALANKAN PENGECEKAN AUTO-ARCHIVE TERLEBIH DAHULU
     await IsarService.checkAndAutoArchiveBills();
 
-    // MENGGUNAKAN ISAR
     final bills = await IsarService.fetchActiveBills();
     if (!mounted) {
       return;
@@ -118,7 +117,6 @@ class _HomePageState extends State<HomePage> {
                 ),
               ],
             ),
-
             trailing: isPaidTab
                 ? ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
@@ -128,7 +126,6 @@ class _HomePageState extends State<HomePage> {
                     icon: const Icon(Icons.archive, size: 18),
                     label: const Text('Arsipkan'),
                     onPressed: () async {
-                      // MENGGUNAKAN ISAR
                       final success = await IsarService.archiveBill(bill.id);
                       if (success && context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
@@ -143,7 +140,6 @@ class _HomePageState extends State<HomePage> {
                     },
                   )
                 : const Icon(Icons.arrow_forward_ios, size: 20),
-
             onTap: () async {
               final result = await Navigator.push(
                 context,
@@ -181,6 +177,33 @@ class _HomePageState extends State<HomePage> {
           ),
           centerTitle: true,
           actions: [
+            // TOMBOL SYNC KE SERVER
+            IconButton(
+              icon: const Icon(Icons.cloud_upload, color: Colors.blue),
+              tooltip: 'Sync ke Server',
+              onPressed: () async {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Menyinkronkan data ke server...'),
+                  ),
+                );
+
+                final success = await SyncService.syncAllToServer();
+
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        success
+                            ? '✅ Berhasil Sync!'
+                            : '❌ Gagal Sync! Cek koneksi server.',
+                      ),
+                      backgroundColor: success ? Colors.green : Colors.red,
+                    ),
+                  );
+                }
+              },
+            ),
             IconButton(
               icon: const Icon(Icons.kitchen),
               tooltip: 'Antrean Dapur',
@@ -213,7 +236,6 @@ class _HomePageState extends State<HomePage> {
             ],
           ),
         ),
-
         drawer: Drawer(
           child: ListView(
             padding: EdgeInsets.zero,
@@ -272,14 +294,12 @@ class _HomePageState extends State<HomePage> {
             ],
           ),
         ),
-
         body: TabBarView(
           children: [
             _buildBillList(unpaidBills, false),
             _buildBillList(paidBills, true),
           ],
         ),
-
         floatingActionButton: FloatingActionButton(
           backgroundColor: Colors.black,
           onPressed: () async {
