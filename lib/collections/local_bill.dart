@@ -8,6 +8,7 @@ class LocalBill {
 
   @Index(unique: true)
   late String uuid; // ID Unik untuk sinkronisasi ke Node.js nanti
+  String? shiftId;
 
   late String customerName;
   late DateTime createdAt;

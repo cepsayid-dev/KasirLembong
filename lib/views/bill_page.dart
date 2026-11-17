@@ -2,13 +2,148 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/bill_provider.dart';
-import '../models/bill_model.dart';
-import '../services/isar_service.dart'; // <-- TAMBAHKAN IMPORT ISAR
+import '../services/isar_service.dart';
+import '../services/sync_service.dart';
 import 'menu_choice_page.dart';
 import 'active_bill_page.dart';
 
 class BillPage extends StatelessWidget {
   const BillPage({super.key});
+
+  Future<void> _showDirectPaymentDialog(
+    BuildContext context,
+    BillProvider billProvider,
+  ) async {
+    String selectedMethod = 'Cash';
+    final totalBill = billProvider.totalBill;
+    final cashController = TextEditingController(
+      text: totalBill.toInt().toString(),
+    );
+
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (statefulContext, setDialogState) {
+          final cashInput = double.tryParse(cashController.text) ?? 0;
+          final change = cashInput - totalBill;
+
+          return AlertDialog(
+            title: const Text('Pembayaran Langsung'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Total Tagihan: Rp ${totalBill.toInt()}',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 18,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    child: SegmentedButton<String>(
+                      segments: const [
+                        ButtonSegment(
+                          value: 'Cash',
+                          label: Text('Tunai (Cash)'),
+                        ),
+                        ButtonSegment(value: 'QRIS', label: Text('QRIS')),
+                      ],
+                      selected: {selectedMethod},
+                      onSelectionChanged: (set) {
+                        setDialogState(() => selectedMethod = set.first);
+                      },
+                    ),
+                  ),
+                  if (selectedMethod == 'Cash') ...[
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: cashController,
+                      keyboardType: TextInputType.number,
+                      autofocus: true,
+                      onChanged: (_) => setDialogState(() {}),
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      decoration: const InputDecoration(
+                        labelText: 'Uang Diterima (Rp)',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Kembalian:',
+                          style: TextStyle(fontSize: 15),
+                        ),
+                        Text(
+                          change >= 0 ? 'Rp ${change.toInt()}' : 'Uang Kurang!',
+                          style: TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.bold,
+                            color: change >= 0 ? Colors.green : Colors.red,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('Batal'),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green,
+                  foregroundColor: Colors.white,
+                ),
+                onPressed: (selectedMethod == 'Cash' && cashInput < totalBill)
+                    ? null
+                    : () async {
+                        final namaTamu =
+                            billProvider.customerName.trim().isEmpty
+                            ? 'Guest'
+                            : billProvider.customerName.trim();
+
+                        final newBill = await IsarService.createBill(
+                          customerName: namaTamu,
+                          items: billProvider.items,
+                          isPaid: true,
+                          paymentMethod: selectedMethod,
+                        );
+
+                        // Langsung dorong sinkronisasi di latar belakang
+                        SyncService.syncAllToServer();
+
+                        if (!dialogContext.mounted || !context.mounted) return;
+                        Navigator.pop(dialogContext);
+                        billProvider.clearBill();
+
+                        Navigator.pushReplacement(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => ActiveBillPage(bill: newBill),
+                          ),
+                        );
+                      },
+                child: const Text('KONFIRMASI LUNAS'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -28,7 +163,6 @@ class BillPage extends StatelessWidget {
               child: Text(currentDate, style: const TextStyle(fontSize: 16)),
             ),
             const SizedBox(height: 10),
-
             Row(
               children: [
                 const Text(
@@ -53,7 +187,6 @@ class BillPage extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 20),
-
             Container(
               decoration: BoxDecoration(
                 border: Border.all(color: Colors.black),
@@ -99,7 +232,6 @@ class BillPage extends StatelessWidget {
                 ],
               ),
             ),
-
             Expanded(
               child: Container(
                 decoration: const BoxDecoration(
@@ -239,7 +371,6 @@ class BillPage extends StatelessWidget {
           ],
         ),
       ),
-
       bottomNavigationBar: Container(
         padding: const EdgeInsets.all(16),
         decoration: const BoxDecoration(
@@ -280,7 +411,7 @@ class BillPage extends StatelessWidget {
               const SizedBox(height: 12),
               Row(
                 children: [
-                  // TOMBOL 1: SIMPAN AJA (MENGGUNAKAN ISAR)
+                  // TOMBOL 1: SIMPAN AJA
                   Expanded(
                     flex: 1,
                     child: SizedBox(
@@ -302,13 +433,14 @@ class BillPage extends StatelessWidget {
                                       ? 'Guest'
                                       : billProvider.customerName.trim();
 
-                                  // Tembak langsung ke IsarService
                                   await IsarService.createBill(
                                     customerName: namaTamu,
                                     items: billProvider.items,
                                     isPaid: false,
                                     paymentMethod: 'Cash',
                                   );
+
+                                  SyncService.syncAllToServer();
 
                                   if (!context.mounted) return;
 
@@ -340,7 +472,7 @@ class BillPage extends StatelessWidget {
                   ),
                   const SizedBox(width: 8),
 
-                  // TOMBOL 2: LANGSUNG BAYAR (MENGGUNAKAN ISAR)
+                  // TOMBOL 2: LANGSUNG BAYAR (PILIH CASH / QRIS)
                   Expanded(
                     flex: 2,
                     child: SizedBox(
@@ -352,38 +484,10 @@ class BillPage extends StatelessWidget {
                         ),
                         onPressed: billProvider.items.isEmpty
                             ? null
-                            : () async {
-                                try {
-                                  final namaTamu =
-                                      billProvider.customerName.trim().isEmpty
-                                      ? 'Guest'
-                                      : billProvider.customerName.trim();
-
-                                  // Tembak langsung ke IsarService
-                                  final newBill = await IsarService.createBill(
-                                    customerName: namaTamu,
-                                    items: billProvider.items,
-                                    isPaid: true,
-                                    paymentMethod: 'Cash',
-                                  );
-
-                                  if (!context.mounted) return;
-
-                                  billProvider.clearBill();
-                                  Navigator.pushReplacement(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) =>
-                                          ActiveBillPage(bill: newBill),
-                                    ),
-                                  );
-                                } catch (e) {
-                                  if (!context.mounted) return;
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(content: Text(e.toString())),
-                                  );
-                                }
-                              },
+                            : () => _showDirectPaymentDialog(
+                                context,
+                                billProvider,
+                              ),
                         child: const Text(
                           'LANGSUNG BAYAR',
                           style: TextStyle(

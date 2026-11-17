@@ -4,6 +4,7 @@ part 'local_expense_note.g.dart';
 @collection
 class LocalExpenseNote {
   Id id = Isar.autoIncrement;
+  String? shiftId;
   late String type;
   late String description;
   late double amount;

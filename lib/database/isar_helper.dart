@@ -6,6 +6,8 @@ import '../collections/local_bill_item.dart';
 import '../collections/local_menu.dart';
 import '../collections/local_expense_note.dart';
 import '../collections/local_expense_item.dart';
+import '../collections/local_employee.dart';
+import '../collections/local_shift.dart';
 
 class IsarHelper {
   static late Isar isar;
@@ -18,6 +20,8 @@ class IsarHelper {
       LocalMenuSchema,
       LocalExpenseNoteSchema,
       LocalExpenseItemSchema,
+      LocalEmployeeSchema,
+      LocalShiftSchema,
     ], directory: dir.path);
   }
 }

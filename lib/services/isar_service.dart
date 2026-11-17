@@ -4,7 +4,8 @@ import 'package:uuid/uuid.dart';
 
 import '../collections/local_bill.dart';
 import '../collections/local_bill_item.dart';
-import '../collections/local_menu.dart'; // <-- IMPORT LOCAL MENU UNTUK STOK
+import '../collections/local_menu.dart';
+import '../collections/local_shift.dart'; // <-- IMPORT LOCAL SHIFT
 import '../database/isar_helper.dart';
 import '../models/cart_item_model.dart';
 import '../models/bill_model.dart';
@@ -15,7 +16,7 @@ class IsarService {
   static final Isar _isar = IsarHelper.isar;
   static const _uuid = Uuid();
 
-  // 1. Simpan Nota Baru (+ POTONG STOK)
+  // 1. Simpan Nota Baru (+ POTONG STOK + TEMPEL SHIFT ID)
   static Future<BillModel> createBill({
     required String customerName,
     required List<CartItem> items,
@@ -24,12 +25,20 @@ class IsarService {
   }) async {
     final billUuid = _uuid.v4();
 
+    // Ambil shift yang sedang aktif ('open')
+    final activeShift = await _isar.localShifts
+        .filter()
+        .statusEqualTo('open')
+        .findFirst();
+
     final newBill = LocalBill()
       ..uuid = billUuid
       ..customerName = customerName
       ..status = isPaid ? 'paid' : 'unpaid'
       ..paymentMethod = paymentMethod
       ..createdAt = DateTime.now()
+      ..shiftId = activeShift
+          ?.uuid // <-- Tempelkan ID Shift aktif
       ..isSynced = false;
 
     final List<LocalBillItem> billItems = items.map((item) {
@@ -146,14 +155,11 @@ class IsarService {
     final bill = await _isar.localBills.filter().uuidEqualTo(uuid).findFirst();
     if (bill != null) {
       await _isar.writeTxn(() async {
-        // --- LOGIKA KEMBALIKAN STOK ---
         final itemsToRestore = await _isar.localBillItems
             .filter()
             .billUuidEqualTo(uuid)
             .and()
-            .isCancelledEqualTo(
-              false,
-            ) // Jangan kembalikan yang sudah dicancel sbelumnya
+            .isCancelledEqualTo(false)
             .findAll();
 
         for (var item in itemsToRestore) {
@@ -185,7 +191,6 @@ class IsarService {
         item.isSynced = false;
         await _isar.localBillItems.put(item);
 
-        // --- LOGIKA KEMBALIKAN STOK ---
         final menu = await _isar.localMenus.get(item.menuItemId);
         if (menu != null && menu.trackingMode == 'numeric') {
           menu.stockQty = menu.stockQty + item.qty;
@@ -221,7 +226,6 @@ class IsarService {
     await _isar.writeTxn(() async {
       await _isar.localBillItems.putAll(isarItems);
 
-      // --- LOGIKA POTONG STOK OTOMATIS ---
       for (var item in newItems) {
         final menu = await _isar.localMenus.get(item.menuId);
         if (menu != null && menu.trackingMode == 'numeric') {

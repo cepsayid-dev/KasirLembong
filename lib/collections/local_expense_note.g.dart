@@ -37,13 +37,18 @@ const LocalExpenseNoteSchema = CollectionSchema(
       name: r'isSynced',
       type: IsarType.bool,
     ),
-    r'status': PropertySchema(
+    r'shiftId': PropertySchema(
       id: 4,
+      name: r'shiftId',
+      type: IsarType.string,
+    ),
+    r'status': PropertySchema(
+      id: 5,
       name: r'status',
       type: IsarType.string,
     ),
     r'type': PropertySchema(
-      id: 5,
+      id: 6,
       name: r'type',
       type: IsarType.string,
     )
@@ -69,6 +74,12 @@ int _localExpenseNoteEstimateSize(
 ) {
   var bytesCount = offsets.last;
   bytesCount += 3 + object.description.length * 3;
+  {
+    final value = object.shiftId;
+    if (value != null) {
+      bytesCount += 3 + value.length * 3;
+    }
+  }
   bytesCount += 3 + object.status.length * 3;
   bytesCount += 3 + object.type.length * 3;
   return bytesCount;
@@ -84,8 +95,9 @@ void _localExpenseNoteSerialize(
   writer.writeDateTime(offsets[1], object.createdAt);
   writer.writeString(offsets[2], object.description);
   writer.writeBool(offsets[3], object.isSynced);
-  writer.writeString(offsets[4], object.status);
-  writer.writeString(offsets[5], object.type);
+  writer.writeString(offsets[4], object.shiftId);
+  writer.writeString(offsets[5], object.status);
+  writer.writeString(offsets[6], object.type);
 }
 
 LocalExpenseNote _localExpenseNoteDeserialize(
@@ -100,8 +112,9 @@ LocalExpenseNote _localExpenseNoteDeserialize(
   object.description = reader.readString(offsets[2]);
   object.id = id;
   object.isSynced = reader.readBool(offsets[3]);
-  object.status = reader.readString(offsets[4]);
-  object.type = reader.readString(offsets[5]);
+  object.shiftId = reader.readStringOrNull(offsets[4]);
+  object.status = reader.readString(offsets[5]);
+  object.type = reader.readString(offsets[6]);
   return object;
 }
 
@@ -121,8 +134,10 @@ P _localExpenseNoteDeserializeProp<P>(
     case 3:
       return (reader.readBool(offset)) as P;
     case 4:
-      return (reader.readString(offset)) as P;
+      return (reader.readStringOrNull(offset)) as P;
     case 5:
+      return (reader.readString(offset)) as P;
+    case 6:
       return (reader.readString(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -548,6 +563,160 @@ extension LocalExpenseNoteQueryFilter
   }
 
   QueryBuilder<LocalExpenseNote, LocalExpenseNote, QAfterFilterCondition>
+      shiftIdIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'shiftId',
+      ));
+    });
+  }
+
+  QueryBuilder<LocalExpenseNote, LocalExpenseNote, QAfterFilterCondition>
+      shiftIdIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'shiftId',
+      ));
+    });
+  }
+
+  QueryBuilder<LocalExpenseNote, LocalExpenseNote, QAfterFilterCondition>
+      shiftIdEqualTo(
+    String? value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'shiftId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<LocalExpenseNote, LocalExpenseNote, QAfterFilterCondition>
+      shiftIdGreaterThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'shiftId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<LocalExpenseNote, LocalExpenseNote, QAfterFilterCondition>
+      shiftIdLessThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'shiftId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<LocalExpenseNote, LocalExpenseNote, QAfterFilterCondition>
+      shiftIdBetween(
+    String? lower,
+    String? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'shiftId',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<LocalExpenseNote, LocalExpenseNote, QAfterFilterCondition>
+      shiftIdStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'shiftId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<LocalExpenseNote, LocalExpenseNote, QAfterFilterCondition>
+      shiftIdEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'shiftId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<LocalExpenseNote, LocalExpenseNote, QAfterFilterCondition>
+      shiftIdContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'shiftId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<LocalExpenseNote, LocalExpenseNote, QAfterFilterCondition>
+      shiftIdMatches(String pattern, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'shiftId',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<LocalExpenseNote, LocalExpenseNote, QAfterFilterCondition>
+      shiftIdIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'shiftId',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<LocalExpenseNote, LocalExpenseNote, QAfterFilterCondition>
+      shiftIdIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'shiftId',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<LocalExpenseNote, LocalExpenseNote, QAfterFilterCondition>
       statusEqualTo(
     String value, {
     bool caseSensitive = true,
@@ -885,6 +1054,20 @@ extension LocalExpenseNoteQuerySortBy
   }
 
   QueryBuilder<LocalExpenseNote, LocalExpenseNote, QAfterSortBy>
+      sortByShiftId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'shiftId', Sort.asc);
+    });
+  }
+
+  QueryBuilder<LocalExpenseNote, LocalExpenseNote, QAfterSortBy>
+      sortByShiftIdDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'shiftId', Sort.desc);
+    });
+  }
+
+  QueryBuilder<LocalExpenseNote, LocalExpenseNote, QAfterSortBy>
       sortByStatus() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'status', Sort.asc);
@@ -984,6 +1167,20 @@ extension LocalExpenseNoteQuerySortThenBy
   }
 
   QueryBuilder<LocalExpenseNote, LocalExpenseNote, QAfterSortBy>
+      thenByShiftId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'shiftId', Sort.asc);
+    });
+  }
+
+  QueryBuilder<LocalExpenseNote, LocalExpenseNote, QAfterSortBy>
+      thenByShiftIdDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'shiftId', Sort.desc);
+    });
+  }
+
+  QueryBuilder<LocalExpenseNote, LocalExpenseNote, QAfterSortBy>
       thenByStatus() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'status', Sort.asc);
@@ -1041,6 +1238,13 @@ extension LocalExpenseNoteQueryWhereDistinct
     });
   }
 
+  QueryBuilder<LocalExpenseNote, LocalExpenseNote, QDistinct> distinctByShiftId(
+      {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'shiftId', caseSensitive: caseSensitive);
+    });
+  }
+
   QueryBuilder<LocalExpenseNote, LocalExpenseNote, QDistinct> distinctByStatus(
       {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
@@ -1087,6 +1291,12 @@ extension LocalExpenseNoteQueryProperty
   QueryBuilder<LocalExpenseNote, bool, QQueryOperations> isSyncedProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'isSynced');
+    });
+  }
+
+  QueryBuilder<LocalExpenseNote, String?, QQueryOperations> shiftIdProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'shiftId');
     });
   }
 

@@ -5,6 +5,7 @@ import '../database/isar_helper.dart';
 import '../collections/local_expense_note.dart';
 import '../collections/local_expense_item.dart';
 import '../collections/local_menu.dart';
+import '../collections/local_shift.dart'; // <-- IMPORT LOCAL SHIFT
 import '../models/expense_model.dart';
 import '../models/menu_model.dart';
 
@@ -40,18 +41,25 @@ class ExpenseService {
     }
   }
 
-  // 3. Tambah Pengeluaran Biasa (Cth: Beli Gas/Parkir)
+  // 3. Tambah Pengeluaran Biasa (+ TEMPEL SHIFT ID)
   static Future<bool> addGeneralExpense(
     String description,
     double amount,
   ) async {
     try {
+      final activeShift = await _isar.localShifts
+          .filter()
+          .statusEqualTo('open')
+          .findFirst();
+
       final note = LocalExpenseNote()
         ..type = 'Biasa'
         ..description = description
         ..amount = amount
         ..status = 'Lunas'
         ..createdAt = DateTime.now()
+        ..shiftId = activeShift
+            ?.uuid // <-- Tempelkan ID Shift aktif
         ..isSynced = false;
 
       await _isar.writeTxn(() async {
@@ -63,24 +71,29 @@ class ExpenseService {
     }
   }
 
-  // 4. BUAT DRAFT LIST BELANJA (PO)
+  // 4. BUAT DRAFT LIST BELANJA (PO) (+ TEMPEL SHIFT ID)
   static Future<bool> createDraftRestock(List<MenuModel> selectedMenus) async {
     try {
+      final activeShift = await _isar.localShifts
+          .filter()
+          .statusEqualTo('open')
+          .findFirst();
+
       final note = LocalExpenseNote()
         ..type = 'Restok'
         ..description = 'Draft Belanja Restok'
         ..amount = 0
         ..status = 'Draft'
         ..createdAt = DateTime.now()
+        ..shiftId = activeShift
+            ?.uuid // <-- Tempelkan ID Shift aktif
         ..isSynced = false;
 
       await _isar.writeTxn(() async {
-        // Simpan nota untuk mendapatkan ID otomatis dari Isar
         final noteId = await _isar.localExpenseNotes.put(note);
 
         List<LocalExpenseItem> itemsToSave = [];
         for (var menu in selectedMenus) {
-          // Cari histori harga beli terakhir untuk fitur auto-complete
           final historyItems = await _isar.localExpenseItems
               .filter()
               .menuIdEqualTo(menu.id)
@@ -150,7 +163,6 @@ class ExpenseService {
         for (var item in items) {
           totalAmount += item.price;
 
-          // A. Update rincian item belanja
           if (item.id != null) {
             final localItem = await _isar.localExpenseItems.get(item.id!);
             if (localItem != null) {
@@ -161,7 +173,6 @@ class ExpenseService {
             }
           }
 
-          // B. UPDATE STOK MASTER MENU LOKAL OTOMATIS
           final menu = await _isar.localMenus.get(item.menuId);
           if (menu != null) {
             if (item.trackingMode == 'numeric') {
@@ -174,7 +185,6 @@ class ExpenseService {
           }
         }
 
-        // C. Tutup nota menjadi Lunas
         final note = await _isar.localExpenseNotes.get(noteId);
         if (note != null) {
           note.status = 'Lunas';

@@ -10,6 +10,8 @@ import '../collections/local_bill_item.dart';
 import '../collections/local_menu.dart';
 import '../collections/local_expense_note.dart';
 import '../collections/local_expense_item.dart';
+import '../collections/local_employee.dart';
+import '../collections/local_shift.dart';
 
 class SyncService {
   static final Isar _isar = IsarHelper.isar;
@@ -35,18 +37,132 @@ class SyncService {
         .filter()
         .isSyncedEqualTo(false)
         .count();
+    final shiftsCount = await _isar.localShifts
+        .filter()
+        .isSyncedEqualTo(false)
+        .count();
+    final menusCount = await _isar.localMenus
+        .filter()
+        .isSyncedEqualTo(false)
+        .count();
 
-    return (billsCount + itemsCount + notesCount + expItemsCount) > 0;
+    return (billsCount +
+            itemsCount +
+            notesCount +
+            expItemsCount +
+            shiftsCount +
+            menusCount) >
+        0;
   }
 
-  // --- FUNGSI UTAMA: SYNC SEMUA DATA ---
+  // --- FUNGSI UTAMA: SYNC SEMUA DATA (MENU, SHIFT, NOTA, PENGELUARAN) ---
   static Future<bool> syncAllToServer() async {
+    final menusSuccess = await syncMenusToServer();
+    final shiftsSuccess = await syncShiftsToServer();
     final billsSuccess = await syncBillsToServer();
     final expensesSuccess = await syncExpensesToServer();
-    return billsSuccess && expensesSuccess;
+    return menusSuccess && shiftsSuccess && billsSuccess && expensesSuccess;
   }
 
-  // --- 1. PUSH: Kirim Transaksi Nota ke Server ---
+  // --- 0. PUSH: Kirim Data Master Menu Baru/Editan ke Server ---
+  static Future<bool> syncMenusToServer() async {
+    try {
+      final unsyncedMenus = await _isar.localMenus
+          .filter()
+          .isSyncedEqualTo(false)
+          .findAll();
+      if (unsyncedMenus.isEmpty) return true;
+
+      final menusJson = unsyncedMenus
+          .map(
+            (m) => {
+              'id': m.id,
+              'name': m.name,
+              'price': m.price,
+              'tracking_mode': m.trackingMode,
+              'stock_qty': m.stockQty,
+              'stock_status': m.stockStatus,
+              'category': m.category,
+            },
+          )
+          .toList();
+
+      final response = await http
+          .post(
+            Uri.parse('$baseUrl/sync/menus'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'menus': menusJson}),
+          )
+          .timeout(const Duration(seconds: 5));
+
+      if (response.statusCode == 200) {
+        await _isar.writeTxn(() async {
+          for (var m in unsyncedMenus) {
+            m.isSynced = true;
+            await _isar.localMenus.put(m);
+          }
+        });
+        return true;
+      }
+      return false;
+    } catch (e) {
+      debugPrint("Sync Menus Error: $e");
+      return false;
+    }
+  }
+
+  // --- 1. PUSH: Kirim Data Shift Kasir ke Server ---
+  static Future<bool> syncShiftsToServer() async {
+    try {
+      final unsyncedShifts = await _isar.localShifts
+          .filter()
+          .isSyncedEqualTo(false)
+          .findAll();
+      if (unsyncedShifts.isEmpty) return true;
+
+      final shiftsJson = unsyncedShifts
+          .map(
+            (s) => {
+              'id': s.uuid,
+              'employee_id': s.employeeId,
+              'employee_name': s.employeeName,
+              'cashier_slot': s.cashierSlot,
+              'opened_at': s.openedAt.toIso8601String(),
+              'closed_at': s.closedAt?.toIso8601String(),
+              'opening_cash': s.openingCash,
+              'expected_cash': s.expectedCash,
+              'actual_cash': s.actualCash,
+              'discrepancy': s.discrepancy,
+              'status': s.status,
+            },
+          )
+          .toList();
+
+      final response = await http
+          .post(
+            Uri.parse('$baseUrl/sync/shifts'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'shifts': shiftsJson}),
+          )
+          .timeout(const Duration(seconds: 5));
+
+      if (response.statusCode == 200) {
+        await _isar.writeTxn(() async {
+          for (var s in unsyncedShifts) {
+            s.isSynced = true;
+            await _isar.localShifts.put(s);
+          }
+        });
+        return true;
+      }
+      return false;
+    } catch (e) {
+      debugPrint("Sync Shifts Error: $e");
+      return false;
+    }
+  }
+
+  // --- 2. PUSH: Kirim Transaksi Nota ke Server ---
   static Future<bool> syncBillsToServer() async {
     try {
       final unsyncedBills = await _isar.localBills
@@ -70,6 +186,7 @@ class SyncService {
               'status': b.status,
               'payment_method': b.paymentMethod ?? 'Cash',
               'created_at': b.createdAt.toIso8601String(),
+              'shift_id': b.shiftId,
             },
           )
           .toList();
@@ -91,11 +208,13 @@ class SyncService {
           )
           .toList();
 
-      final response = await http.post(
-        Uri.parse('$baseUrl/sync/bills'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'bills': billsJson, 'bill_items': itemsJson}),
-      );
+      final response = await http
+          .post(
+            Uri.parse('$baseUrl/sync/bills'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'bills': billsJson, 'bill_items': itemsJson}),
+          )
+          .timeout(const Duration(seconds: 5));
 
       if (response.statusCode == 200) {
         await _isar.writeTxn(() async {
@@ -117,7 +236,7 @@ class SyncService {
     }
   }
 
-  // --- 2. PUSH: Kirim Pengeluaran & Restok ke Server ---
+  // --- 3. PUSH: Kirim Pengeluaran & Restok ke Server ---
   static Future<bool> syncExpensesToServer() async {
     try {
       final unsyncedNotes = await _isar.localExpenseNotes
@@ -147,6 +266,7 @@ class SyncService {
               'amount': n.amount,
               'status': n.status,
               'created_at': n.createdAt.toIso8601String(),
+              'shift_id': n.shiftId,
             },
           )
           .toList();
@@ -165,11 +285,13 @@ class SyncService {
         };
       }).toList();
 
-      final response = await http.post(
-        Uri.parse('$baseUrl/sync/expenses'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'notes': notesJson, 'items': itemsJson}),
-      );
+      final response = await http
+          .post(
+            Uri.parse('$baseUrl/sync/expenses'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'notes': notesJson, 'items': itemsJson}),
+          )
+          .timeout(const Duration(seconds: 5));
 
       if (response.statusCode == 200) {
         await _isar.writeTxn(() async {
@@ -191,17 +313,16 @@ class SyncService {
     }
   }
 
-  // --- 3. PULL: Tarik Master Menu dari Server ---
+  // --- 4. PULL: Tarik Master Menu dari Server ---
   static Future<bool> pullMenusFromServer() async {
     try {
-      final response = await http.get(Uri.parse('$baseUrl/menus'));
-
+      final response = await http
+          .get(Uri.parse('$baseUrl/menus'))
+          .timeout(const Duration(seconds: 5));
       if (response.statusCode == 200) {
         final jsonResponse = jsonDecode(response.body);
-
         if (jsonResponse['status'] == 'success') {
           final List<dynamic> menuData = jsonResponse['data'];
-
           final List<LocalMenu> downloadedMenus = menuData.map((m) {
             return LocalMenu()
               ..id = m['id']
@@ -217,13 +338,44 @@ class SyncService {
           await _isar.writeTxn(() async {
             await _isar.localMenus.putAll(downloadedMenus);
           });
-
           return true;
         }
       }
       return false;
     } catch (e) {
       debugPrint("Gagal Tarik Menu: $e");
+      return false;
+    }
+  }
+
+  // --- 5. PULL: Tarik Daftar Pegawai Aktif dari Server ---
+  static Future<bool> pullEmployeesFromServer() async {
+    try {
+      final response = await http
+          .get(Uri.parse('$baseUrl/employees'))
+          .timeout(const Duration(seconds: 5));
+      if (response.statusCode == 200) {
+        final jsonResponse = jsonDecode(response.body);
+        if (jsonResponse['status'] == 'success') {
+          final List<dynamic> empData = jsonResponse['data'];
+          final List<LocalEmployee> downloadedEmployees = empData.map((e) {
+            return LocalEmployee()
+              ..id = e['id']
+              ..name = e['name']
+              ..pin = e['pin'].toString()
+              ..role = e['role'] ?? 'kasir';
+          }).toList();
+
+          await _isar.writeTxn(() async {
+            await _isar.localEmployees.clear();
+            await _isar.localEmployees.putAll(downloadedEmployees);
+          });
+          return true;
+        }
+      }
+      return false;
+    } catch (e) {
+      debugPrint("Gagal Tarik Pegawai: $e");
       return false;
     }
   }

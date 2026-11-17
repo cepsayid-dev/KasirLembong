@@ -4,6 +4,7 @@ import 'package:isar/isar.dart';
 import '../database/isar_helper.dart';
 import '../collections/local_menu.dart';
 import '../models/menu_model.dart';
+import 'sync_service.dart';
 
 class MenuService {
   static final Isar _isar = IsarHelper.isar;
@@ -13,10 +14,8 @@ class MenuService {
       List<LocalMenu> results;
 
       if (keyword.isEmpty) {
-        // Ambil semua menu dan urutkan berdasarkan nama
         results = await _isar.localMenus.where().sortByName().findAll();
       } else {
-        // Filter berdasarkan kata kunci
         results = await _isar.localMenus
             .filter()
             .nameContains(keyword, caseSensitive: false)
@@ -49,8 +48,9 @@ class MenuService {
     String trackingMode,
     int stockQty,
     String stockStatus,
-    String category,
-  ) async {
+    String category, {
+    bool autoSync = true,
+  }) async {
     try {
       final newMenu = LocalMenu()
         ..name = name
@@ -64,6 +64,10 @@ class MenuService {
       await _isar.writeTxn(() async {
         await _isar.localMenus.put(newMenu);
       });
+
+      if (autoSync) {
+        SyncService.syncMenusToServer();
+      }
       return true;
     } catch (e) {
       debugPrint("Gagal menambah menu ke Isar: $e");
@@ -94,6 +98,8 @@ class MenuService {
         await _isar.writeTxn(() async {
           await _isar.localMenus.put(menu);
         });
+
+        SyncService.syncMenusToServer();
         return true;
       }
       return false;

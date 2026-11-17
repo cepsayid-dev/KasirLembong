@@ -3,7 +3,8 @@ import 'package:flutter/material.dart';
 import '../models/menu_model.dart';
 import '../services/menu_service.dart';
 import '../services/expense_service.dart';
-import '../services/sync_service.dart'; // <-- IMPORT SYNC SERVICE
+import '../services/sync_service.dart';
+import 'add_batch_menu_page.dart'; // <-- IMPORT HALAMAN TAMBAH BATCH MENU
 
 class MasterMenuPage extends StatefulWidget {
   const MasterMenuPage({super.key});
@@ -141,31 +142,28 @@ class _MasterMenuPageState extends State<MasterMenuPage> {
     return sortedGroup;
   }
 
-  void _showMenuForm({MenuModel? existingMenu}) {
-    final isEdit = existingMenu != null;
-    final nameController = TextEditingController(
-      text: isEdit ? existingMenu.name : '',
-    );
+  // Dialog khusus Edit 1 Menu
+  void _showEditMenuForm(MenuModel existingMenu) {
+    final nameController = TextEditingController(text: existingMenu.name);
     final priceController = TextEditingController(
-      text: isEdit ? existingMenu.price.toInt().toString() : '',
+      text: existingMenu.price.toInt().toString(),
     );
     final stockQtyController = TextEditingController(
-      text: isEdit ? existingMenu.stockQty.toString() : '0',
+      text: existingMenu.stockQty.toString(),
     );
 
-    String trackingMode = isEdit ? existingMenu.trackingMode : 'numeric';
-    String stockStatus = isEdit ? existingMenu.stockStatus : 'in_stock';
-    String category = 'Makanan';
-    if (isEdit && allowedCategories.contains(existingMenu.category)) {
-      category = existingMenu.category;
-    }
+    String trackingMode = existingMenu.trackingMode;
+    String stockStatus = existingMenu.stockStatus;
+    String category = allowedCategories.contains(existingMenu.category)
+        ? existingMenu.category
+        : 'Makanan';
 
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) {
           return AlertDialog(
-            title: Text(isEdit ? 'Edit Menu' : 'Tambah Menu Baru'),
+            title: const Text('Edit Menu'),
             content: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -182,7 +180,7 @@ class _MasterMenuPageState extends State<MasterMenuPage> {
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
-                    initialValue: category,
+                    value: category,
                     decoration: const InputDecoration(
                       labelText: 'Kategori Manual',
                     ),
@@ -196,7 +194,7 @@ class _MasterMenuPageState extends State<MasterMenuPage> {
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
-                    initialValue: trackingMode,
+                    value: trackingMode,
                     decoration: const InputDecoration(
                       labelText: 'Mode Lacak Stok',
                     ),
@@ -224,7 +222,7 @@ class _MasterMenuPageState extends State<MasterMenuPage> {
                     )
                   else
                     DropdownButtonFormField<String>(
-                      initialValue: stockStatus,
+                      value: stockStatus,
                       decoration: const InputDecoration(
                         labelText: 'Status Ketersediaan',
                       ),
@@ -262,24 +260,15 @@ class _MasterMenuPageState extends State<MasterMenuPage> {
                   final price = double.tryParse(priceController.text) ?? 0;
                   final qty = int.tryParse(stockQtyController.text) ?? 0;
 
-                  bool success = isEdit
-                      ? await MenuService.updateMenu(
-                          existingMenu.id,
-                          nameController.text,
-                          price,
-                          trackingMode,
-                          qty,
-                          stockStatus,
-                          category,
-                        )
-                      : await MenuService.addMenu(
-                          nameController.text,
-                          price,
-                          trackingMode,
-                          qty,
-                          stockStatus,
-                          category,
-                        );
+                  final success = await MenuService.updateMenu(
+                    existingMenu.id,
+                    nameController.text,
+                    price,
+                    trackingMode,
+                    qty,
+                    stockStatus,
+                    category,
+                  );
 
                   if (success && context.mounted) {
                     Navigator.pop(context);
@@ -381,7 +370,7 @@ class _MasterMenuPageState extends State<MasterMenuPage> {
               children: [
                 IconButton(
                   icon: const Icon(Icons.edit, color: Colors.blue),
-                  onPressed: () => _showMenuForm(existingMenu: menu),
+                  onPressed: () => _showEditMenuForm(menu),
                 ),
                 IconButton(
                   icon: const Icon(Icons.delete, color: Colors.red),
@@ -450,7 +439,7 @@ class _MasterMenuPageState extends State<MasterMenuPage> {
                     ),
                   );
                   if (success) {
-                    _loadMenus(); // Refresh UI biar menunya langsung muncul
+                    _loadMenus();
                   }
                 }
               },
@@ -563,7 +552,6 @@ class _MasterMenuPageState extends State<MasterMenuPage> {
               ],
             ),
           ),
-
           Expanded(
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
@@ -651,7 +639,17 @@ class _MasterMenuPageState extends State<MasterMenuPage> {
               ),
             )
           : FloatingActionButton(
-              onPressed: _showMenuForm,
+              onPressed: () async {
+                final result = await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const AddBatchMenuPage(),
+                  ),
+                );
+                if (result == true && mounted) {
+                  _loadMenus();
+                }
+              },
               backgroundColor: Colors.black,
               child: const Icon(Icons.add, color: Colors.white),
             ),

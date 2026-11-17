@@ -37,13 +37,18 @@ const LocalBillSchema = CollectionSchema(
       name: r'paymentMethod',
       type: IsarType.string,
     ),
-    r'status': PropertySchema(
+    r'shiftId': PropertySchema(
       id: 4,
+      name: r'shiftId',
+      type: IsarType.string,
+    ),
+    r'status': PropertySchema(
+      id: 5,
       name: r'status',
       type: IsarType.string,
     ),
     r'uuid': PropertySchema(
-      id: 5,
+      id: 6,
       name: r'uuid',
       type: IsarType.string,
     )
@@ -89,6 +94,12 @@ int _localBillEstimateSize(
       bytesCount += 3 + value.length * 3;
     }
   }
+  {
+    final value = object.shiftId;
+    if (value != null) {
+      bytesCount += 3 + value.length * 3;
+    }
+  }
   bytesCount += 3 + object.status.length * 3;
   bytesCount += 3 + object.uuid.length * 3;
   return bytesCount;
@@ -104,8 +115,9 @@ void _localBillSerialize(
   writer.writeString(offsets[1], object.customerName);
   writer.writeBool(offsets[2], object.isSynced);
   writer.writeString(offsets[3], object.paymentMethod);
-  writer.writeString(offsets[4], object.status);
-  writer.writeString(offsets[5], object.uuid);
+  writer.writeString(offsets[4], object.shiftId);
+  writer.writeString(offsets[5], object.status);
+  writer.writeString(offsets[6], object.uuid);
 }
 
 LocalBill _localBillDeserialize(
@@ -120,8 +132,9 @@ LocalBill _localBillDeserialize(
   object.id = id;
   object.isSynced = reader.readBool(offsets[2]);
   object.paymentMethod = reader.readStringOrNull(offsets[3]);
-  object.status = reader.readString(offsets[4]);
-  object.uuid = reader.readString(offsets[5]);
+  object.shiftId = reader.readStringOrNull(offsets[4]);
+  object.status = reader.readString(offsets[5]);
+  object.uuid = reader.readString(offsets[6]);
   return object;
 }
 
@@ -141,8 +154,10 @@ P _localBillDeserializeProp<P>(
     case 3:
       return (reader.readStringOrNull(offset)) as P;
     case 4:
-      return (reader.readString(offset)) as P;
+      return (reader.readStringOrNull(offset)) as P;
     case 5:
+      return (reader.readString(offset)) as P;
+    case 6:
       return (reader.readString(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -745,6 +760,153 @@ extension LocalBillQueryFilter
     });
   }
 
+  QueryBuilder<LocalBill, LocalBill, QAfterFilterCondition> shiftIdIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'shiftId',
+      ));
+    });
+  }
+
+  QueryBuilder<LocalBill, LocalBill, QAfterFilterCondition> shiftIdIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'shiftId',
+      ));
+    });
+  }
+
+  QueryBuilder<LocalBill, LocalBill, QAfterFilterCondition> shiftIdEqualTo(
+    String? value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'shiftId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<LocalBill, LocalBill, QAfterFilterCondition> shiftIdGreaterThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'shiftId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<LocalBill, LocalBill, QAfterFilterCondition> shiftIdLessThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'shiftId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<LocalBill, LocalBill, QAfterFilterCondition> shiftIdBetween(
+    String? lower,
+    String? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'shiftId',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<LocalBill, LocalBill, QAfterFilterCondition> shiftIdStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'shiftId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<LocalBill, LocalBill, QAfterFilterCondition> shiftIdEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'shiftId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<LocalBill, LocalBill, QAfterFilterCondition> shiftIdContains(
+      String value,
+      {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'shiftId',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<LocalBill, LocalBill, QAfterFilterCondition> shiftIdMatches(
+      String pattern,
+      {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'shiftId',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<LocalBill, LocalBill, QAfterFilterCondition> shiftIdIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'shiftId',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<LocalBill, LocalBill, QAfterFilterCondition>
+      shiftIdIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'shiftId',
+        value: '',
+      ));
+    });
+  }
+
   QueryBuilder<LocalBill, LocalBill, QAfterFilterCondition> statusEqualTo(
     String value, {
     bool caseSensitive = true,
@@ -1061,6 +1223,18 @@ extension LocalBillQuerySortBy on QueryBuilder<LocalBill, LocalBill, QSortBy> {
     });
   }
 
+  QueryBuilder<LocalBill, LocalBill, QAfterSortBy> sortByShiftId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'shiftId', Sort.asc);
+    });
+  }
+
+  QueryBuilder<LocalBill, LocalBill, QAfterSortBy> sortByShiftIdDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'shiftId', Sort.desc);
+    });
+  }
+
   QueryBuilder<LocalBill, LocalBill, QAfterSortBy> sortByStatus() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'status', Sort.asc);
@@ -1148,6 +1322,18 @@ extension LocalBillQuerySortThenBy
     });
   }
 
+  QueryBuilder<LocalBill, LocalBill, QAfterSortBy> thenByShiftId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'shiftId', Sort.asc);
+    });
+  }
+
+  QueryBuilder<LocalBill, LocalBill, QAfterSortBy> thenByShiftIdDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'shiftId', Sort.desc);
+    });
+  }
+
   QueryBuilder<LocalBill, LocalBill, QAfterSortBy> thenByStatus() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'status', Sort.asc);
@@ -1202,6 +1388,13 @@ extension LocalBillQueryWhereDistinct
     });
   }
 
+  QueryBuilder<LocalBill, LocalBill, QDistinct> distinctByShiftId(
+      {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'shiftId', caseSensitive: caseSensitive);
+    });
+  }
+
   QueryBuilder<LocalBill, LocalBill, QDistinct> distinctByStatus(
       {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
@@ -1246,6 +1439,12 @@ extension LocalBillQueryProperty
   QueryBuilder<LocalBill, String?, QQueryOperations> paymentMethodProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'paymentMethod');
+    });
+  }
+
+  QueryBuilder<LocalBill, String?, QQueryOperations> shiftIdProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'shiftId');
     });
   }
 
