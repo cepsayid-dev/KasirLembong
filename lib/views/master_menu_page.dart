@@ -4,7 +4,7 @@ import '../models/menu_model.dart';
 import '../services/menu_service.dart';
 import '../services/expense_service.dart';
 import '../services/sync_service.dart';
-import 'add_batch_menu_page.dart'; // <-- IMPORT HALAMAN TAMBAH BATCH MENU
+import 'add_batch_menu_page.dart';
 
 class MasterMenuPage extends StatefulWidget {
   const MasterMenuPage({super.key});
@@ -106,43 +106,31 @@ class _MasterMenuPageState extends State<MasterMenuPage> {
     return list;
   }
 
-  Map<String, List<MenuModel>> _groupMenus(List<MenuModel> menus) {
-    Map<String, List<MenuModel>> grouped = {};
-    for (var menu in menus) {
-      List<String> currentWords = menu.name.trim().split(RegExp(r'\s+'));
-      int maxMatch = 0;
-      String bestPrefix = currentWords.first;
+  // Kelompokkan menu berdasarkan Kategori (Makanan, Minuman, Snack, dst.)
+  Map<String, List<MenuModel>> _groupMenusByCategory(List<MenuModel> menus) {
+    final Map<String, List<MenuModel>> grouped = {};
 
-      for (var other in menus) {
-        if (menu.id == other.id) {
-          continue;
-        }
-        List<String> otherWords = other.name.trim().split(RegExp(r'\s+'));
-        int matchCount = 0;
-        for (int i = 0; i < currentWords.length && i < otherWords.length; i++) {
-          if (currentWords[i].toLowerCase() == otherWords[i].toLowerCase()) {
-            matchCount++;
-          } else {
-            break;
-          }
-        }
-        if (matchCount > maxMatch) {
-          maxMatch = matchCount;
-          bestPrefix = currentWords.take(matchCount).join(' ');
-        }
+    // Masukkan sesuai urutan allowedCategories terlebih dahulu
+    for (final cat in allowedCategories) {
+      final itemsInCat = menus.where((m) => m.category == cat).toList();
+      if (itemsInCat.isNotEmpty) {
+        grouped[cat] = itemsInCat;
       }
-      grouped.putIfAbsent(bestPrefix, () => []).add(menu);
     }
 
-    var sortedKeys = grouped.keys.toList()..sort();
-    Map<String, List<MenuModel>> sortedGroup = {};
-    for (var key in sortedKeys) {
-      sortedGroup[key] = grouped[key]!;
+    // Jika ada kategori di luar daftar standar, tetap tampilkan di bagian bawah
+    for (final menu in menus) {
+      if (!allowedCategories.contains(menu.category)) {
+        final fallbackCat = menu.category.trim().isEmpty
+            ? 'Lainnya'
+            : menu.category;
+        grouped.putIfAbsent(fallbackCat, () => []).add(menu);
+      }
     }
-    return sortedGroup;
+
+    return grouped;
   }
 
-  // Dialog khusus Edit 1 Menu
   void _showEditMenuForm(MenuModel existingMenu) {
     final nameController = TextEditingController(text: existingMenu.name);
     final priceController = TextEditingController(
@@ -352,17 +340,10 @@ class _MasterMenuPageState extends State<MasterMenuPage> {
         menu.name,
         style: const TextStyle(fontWeight: FontWeight.w500),
       ),
-      subtitle: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Rp ${menu.price.toInt()} | Kategori: ${menu.category}'),
-          Text(
-            displayStock,
-            style: TextStyle(color: stockColor, fontWeight: FontWeight.bold),
-          ),
-        ],
+      subtitle: Text(
+        'Rp ${menu.price.toInt()}  •  $displayStock',
+        style: TextStyle(color: stockColor, fontWeight: FontWeight.w600),
       ),
-      isThreeLine: true,
       trailing: _isSelectionMode
           ? null
           : Row(
@@ -395,6 +376,7 @@ class _MasterMenuPageState extends State<MasterMenuPage> {
   @override
   Widget build(BuildContext context) {
     final processedList = _processedMenus;
+    final groupedByCategory = _groupMenusByCategory(processedList);
     List<String> filterCategories = ['Semua Kategori', ...allowedCategories];
 
     return Scaffold(
@@ -414,7 +396,6 @@ class _MasterMenuPageState extends State<MasterMenuPage> {
               }),
             )
           else ...[
-            // --- TOMBOL TARIK MENU DARI SERVER ---
             IconButton(
               icon: const Icon(Icons.cloud_download, color: Colors.blue),
               tooltip: 'Tarik Menu dari Server',
@@ -444,7 +425,6 @@ class _MasterMenuPageState extends State<MasterMenuPage> {
                 }
               },
             ),
-            // --- TOMBOL BUAT PO RESTOK ---
             IconButton(
               icon: const Icon(Icons.checklist),
               tooltip: 'Buat PO Belanja',
@@ -525,22 +505,29 @@ class _MasterMenuPageState extends State<MasterMenuPage> {
                           child: DropdownButton<String>(
                             value: _selectedSort,
                             isExpanded: true,
-                            items:
-                                [
-                                      'Abjad (A-Z)',
-                                      'Stok Terdikit',
-                                      'Stok Terbanyak',
-                                    ]
-                                    .map(
-                                      (s) => DropdownMenuItem(
-                                        value: s,
-                                        child: Text(
-                                          s,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ),
-                                    )
-                                    .toList(),
+                            items: const [
+                              DropdownMenuItem(
+                                value: 'Abjad (A-Z)',
+                                child: Text(
+                                  'Abjad (A-Z)',
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              DropdownMenuItem(
+                                value: 'Stok Terdikit',
+                                child: Text(
+                                  'Stok Terdikit',
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              DropdownMenuItem(
+                                value: 'Stok Terbanyak',
+                                child: Text(
+                                  'Stok Terbanyak',
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
                             onChanged: (val) =>
                                 setState(() => _selectedSort = val!),
                           ),
@@ -557,14 +544,14 @@ class _MasterMenuPageState extends State<MasterMenuPage> {
                 ? const Center(child: CircularProgressIndicator())
                 : processedList.isEmpty
                 ? const Center(child: Text('Menu tidak ditemukan.'))
-                : _selectedSort == 'Abjad (A-Z)'
-                ? ListView.builder(
+                : ListView.builder(
                     padding: const EdgeInsets.only(bottom: 80),
-                    itemCount: _groupMenus(processedList).length,
+                    itemCount: groupedByCategory.length,
                     itemBuilder: (context, index) {
-                      final groupedMenus = _groupMenus(processedList);
-                      final groupName = groupedMenus.keys.elementAt(index);
-                      final items = groupedMenus[groupName]!;
+                      final categoryName = groupedByCategory.keys.elementAt(
+                        index,
+                      );
+                      final items = groupedByCategory[categoryName]!;
 
                       return Card(
                         margin: const EdgeInsets.symmetric(
@@ -573,33 +560,47 @@ class _MasterMenuPageState extends State<MasterMenuPage> {
                         ),
                         elevation: 2,
                         child: ExpansionTile(
+                          key: PageStorageKey<String>(
+                            'cat_${categoryName}_${_searchQuery}_${_selectedCategory}_$_isSelectionMode',
+                          ),
                           initiallyExpanded:
-                              _searchQuery.isNotEmpty || _isSelectionMode,
-                          title: Text(
-                            groupName,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 18,
-                            ),
+                              _searchQuery.isNotEmpty ||
+                              _selectedCategory != 'Semua Kategori' ||
+                              _isSelectionMode,
+                          title: Row(
+                            children: [
+                              Text(
+                                categoryName,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 17,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.grey.shade200,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Text(
+                                  '${items.length}',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.black87,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                           children: items
                               .map((menu) => _buildMenuTile(menu))
                               .toList(),
                         ),
-                      );
-                    },
-                  )
-                : ListView.builder(
-                    padding: const EdgeInsets.only(bottom: 80),
-                    itemCount: processedList.length,
-                    itemBuilder: (context, index) {
-                      return Card(
-                        margin: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        elevation: 1,
-                        child: _buildMenuTile(processedList[index]),
                       );
                     },
                   ),

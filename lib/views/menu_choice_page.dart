@@ -19,7 +19,7 @@ class _MenuChoicePageState extends State<MenuChoicePage> {
 
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
-  String _selectedCategory = 'Semua Menu';
+  String _selectedCategory = 'Semua Kategori';
 
   final List<String> allowedCategories = [
     'Makanan',
@@ -57,59 +57,52 @@ class _MenuChoicePageState extends State<MenuChoicePage> {
   }
 
   List<MenuModel> get _filteredMenus {
-    return _allMenus.where((menu) {
+    final list = _allMenus.where((menu) {
       if (_searchQuery.isNotEmpty &&
           !menu.name.toLowerCase().contains(_searchQuery.toLowerCase())) {
         return false;
       }
-      if (_selectedCategory != 'Semua Menu' &&
+      if (_selectedCategory != 'Semua Kategori' &&
           menu.category != _selectedCategory) {
         return false;
       }
       return true;
     }).toList();
+
+    list.sort((a, b) => a.name.compareTo(b.name));
+    return list;
   }
 
-  Map<String, List<MenuModel>> _groupMenus(List<MenuModel> menus) {
-    Map<String, List<MenuModel>> grouped = {};
-    for (var menu in menus) {
-      List<String> currentWords = menu.name.trim().split(RegExp(r'\s+'));
-      int maxMatch = 0;
-      String bestPrefix = currentWords.first;
+  // Kelompokkan menu berdasarkan Kategori (seragam dengan MasterMenuPage)
+  Map<String, List<MenuModel>> _groupMenusByCategory(List<MenuModel> menus) {
+    final Map<String, List<MenuModel>> grouped = {};
 
-      for (var other in menus) {
-        if (menu.id == other.id) {
-          continue;
-        }
-        List<String> otherWords = other.name.trim().split(RegExp(r'\s+'));
-        int matchCount = 0;
-        for (int i = 0; i < currentWords.length && i < otherWords.length; i++) {
-          if (currentWords[i].toLowerCase() == otherWords[i].toLowerCase()) {
-            matchCount++;
-          } else {
-            break;
-          }
-        }
-        if (matchCount > maxMatch) {
-          maxMatch = matchCount;
-          bestPrefix = currentWords.take(matchCount).join(' ');
-        }
+    for (final cat in allowedCategories) {
+      final itemsInCat = menus.where((m) => m.category == cat).toList();
+      if (itemsInCat.isNotEmpty) {
+        grouped[cat] = itemsInCat;
       }
-      grouped.putIfAbsent(bestPrefix, () => []).add(menu);
     }
 
-    var sortedKeys = grouped.keys.toList()..sort();
-    Map<String, List<MenuModel>> sortedGroup = {};
-    for (var key in sortedKeys) {
-      sortedGroup[key] = grouped[key]!;
+    for (final menu in menus) {
+      if (!allowedCategories.contains(menu.category)) {
+        final fallbackCat = menu.category.trim().isEmpty
+            ? 'Lainnya'
+            : menu.category;
+        grouped.putIfAbsent(fallbackCat, () => []).add(menu);
+      }
     }
-    return sortedGroup;
+
+    return grouped;
   }
 
   @override
   Widget build(BuildContext context) {
-    final groupedMenus = _groupMenus(_filteredMenus);
-    List<String> filterCategories = ['Semua Menu', ...allowedCategories];
+    final groupedMenus = _groupMenusByCategory(_filteredMenus);
+    final List<String> filterCategories = [
+      'Semua Kategori',
+      ...allowedCategories,
+    ];
 
     return Scaffold(
       appBar: AppBar(title: const Text('Pilih Pesanan'), centerTitle: true),
@@ -182,10 +175,11 @@ class _MenuChoicePageState extends State<MenuChoicePage> {
                 : groupedMenus.isEmpty
                 ? const Center(child: Text('Menu tidak ditemukan.'))
                 : ListView.builder(
+                    padding: const EdgeInsets.only(bottom: 80),
                     itemCount: groupedMenus.length,
                     itemBuilder: (context, index) {
-                      final category = groupedMenus.keys.elementAt(index);
-                      final items = groupedMenus[category]!;
+                      final categoryName = groupedMenus.keys.elementAt(index);
+                      final items = groupedMenus[categoryName]!;
 
                       return Card(
                         margin: const EdgeInsets.symmetric(
@@ -194,15 +188,42 @@ class _MenuChoicePageState extends State<MenuChoicePage> {
                         ),
                         elevation: 2,
                         child: ExpansionTile(
-                          initiallyExpanded: _searchQuery.isNotEmpty,
-                          title: Text(
-                            category,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 18,
-                            ),
+                          key: PageStorageKey<String>(
+                            'choice_cat_${categoryName}_${_searchQuery}_$_selectedCategory',
                           ),
-                          subtitle: Text('${items.length} varian menu'),
+                          initiallyExpanded:
+                              _searchQuery.isNotEmpty ||
+                              _selectedCategory != 'Semua Kategori',
+                          title: Row(
+                            children: [
+                              Text(
+                                categoryName,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 17,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.grey.shade200,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Text(
+                                  '${items.length}',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.black87,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                           children: items.map((menu) {
                             String displayStock = "";
                             Color stockColor = Colors.black;
@@ -231,10 +252,15 @@ class _MenuChoicePageState extends State<MenuChoicePage> {
                             }
 
                             return ListTile(
-                              title: Text(menu.name),
+                              title: Text(
+                                menu.name,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
                               subtitle: Row(
                                 children: [
-                                  Text('Rp ${menu.price.toInt()} | '),
+                                  Text('Rp ${menu.price.toInt()}  •  '),
                                   Text(
                                     displayStock,
                                     style: TextStyle(
@@ -244,9 +270,9 @@ class _MenuChoicePageState extends State<MenuChoicePage> {
                                   ),
                                 ],
                               ),
-                              trailing: const Icon(
+                              trailing: Icon(
                                 Icons.add_circle,
-                                color: Colors.blue,
+                                color: isClickable ? Colors.blue : Colors.grey,
                               ),
                               onTap: isClickable
                                   ? () async {
@@ -274,7 +300,6 @@ class _MenuChoicePageState extends State<MenuChoicePage> {
           ),
         ],
       ),
-
       bottomNavigationBar: Consumer<BillProvider>(
         builder: (context, billProvider, child) {
           if (billProvider.items.isEmpty) {
